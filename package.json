@@ -1,0 +1,25 @@
+{
+  "name": "soundxs-soundcloud-player",
+  "version": "2.0.0",
+  "description": "SoundCloud Mobile Web Player Proxy & Streamer - Enhanced",
+  "type": "module",
+  "scripts": {
+    "start": "vercel dev",
+    "dev": "vercel dev --debug",
+    "test": "node --check api/dl.js && node --check api/get-credentials.js && node --check api/import-playlist.js && node --check api/lyrics.js && node --check api/search.js && node --check api/stream.js"
+  },
+  "dependencies": {},
+  "devDependencies": {},
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "soundcloud",
+    "streaming",
+    "proxy",
+    "audio",
+    "music"
+  ],
+  "author": "xs0ciety",
+  "license": "MIT"
+}
