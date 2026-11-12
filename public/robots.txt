@@ -1,0 +1,12 @@
+User-agent: *
+Allow: /
+
+# Blokir area yang gak perlu di-index
+Disallow: /api/
+Disallow: /sw.js
+Disallow: /soundxs-api-client.js
+Disallow: /offline-fix.js
+Disallow: /audio.js
+
+# Sitemap
+Sitemap: https://soundxs.web.id/sitemap.xml
