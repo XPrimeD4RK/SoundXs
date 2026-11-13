@@ -1308,12 +1308,29 @@ window.addEventListener("load", async () => {
     <div class="max-w-[440px] mx-auto px-4 pt-6 pb-10">
 
       <div class="text-center mb-7">
-        <div class="relative inline-block">
-          <div id="profileAvatarBox" class="w-[116px] h-[116px] rounded-[30px] mx-auto overflow-hidden accent-bg flex items-center justify-center text-[40px] font-extrabold border border-white/10 shadow-[0_14px_40px_-10px_rgba(0,0,0,.9)]">
-            <span id="profileAvatar">X</span>
+        <div id="profileBanner" class="profile-banner relative w-full overflow-hidden rounded-[22px] border border-white/[0.10] shadow-[0_16px_40px_-12px_rgba(0,0,0,.75)]">
+          <video
+            id="profileBannerVideo"
+            class="block w-full h-[180px] object-cover bg-black"
+            src="https://files.catbox.moe/7qkvgg.mp4"
+            autoplay
+            muted
+            loop
+            playsinline
+            preload="metadata"
+          ></video>
+          <div class="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/70 via-black/15 to-transparent"></div>
+          <span class="absolute top-3 right-3 z-[1] inline-flex items-center gap-1.5 rounded-full bg-emerald-500/90 px-2.5 py-1 text-[10px] font-bold tracking-wider text-white shadow-sm">
+            <span class="w-[6px] h-[6px] rounded-full bg-white animate-pulse"></span>LIVE
+          </span>
+          <div class="absolute bottom-3 left-3 right-3 z-[1] text-left">
+            <div class="text-[18px] font-extrabold tracking-tight leading-none">
+              <span class="text-white">xs0ciety</span>
+              <span class="text-cyan-300 ml-1">ENGINE</span>
+            </div>
           </div>
         </div>
-        <h2 id="profileName" class="grad-text text-[34px] leading-tight font-extrabold mt-4 tracking-tight">SoundXs</h2>
+        <h2 id="profileName" class="grad-text text-[34px] leading-tight font-extrabold mt-5 tracking-tight">SoundXs</h2>
         <p id="profileBio" class="text-[15px] text-white/50 mt-1 px-4">Streaming Musik dengan Lirik Sinkron</p>
       </div>
 
@@ -2109,9 +2126,15 @@ if (document.readyState === "loading") {
 function updateProfileUI() {
   document.getElementById("profileName").textContent = "SoundXs";
   document.getElementById("profileBio").textContent = "Streaming musik gratis dengan lirik sinkron";
-  const box = document.getElementById("profileAvatarBox");
-  box.classList.add("relative");
-  box.innerHTML = "<span>S</span>";
+  // Banner video (catbox) — pastikan play saat tab profil dibuka
+  const vid = document.getElementById("profileBannerVideo");
+  if (vid) {
+    try {
+      vid.muted = true;
+      const p = vid.play();
+      if (p && typeof p.catch === "function") p.catch(() => {});
+    } catch {}
+  }
 }
 function openSupport() {
   const m = document.getElementById("supportModal");
