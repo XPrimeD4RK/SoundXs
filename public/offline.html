@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SoundXs — Offline</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:#121212;color:#fff;font-family:system-ui,sans-serif;
+       display:flex;flex-direction:column;align-items:center;justify-content:center;
+       min-height:100vh;text-align:center;padding:24px}
+  .icon{font-size:64px;margin-bottom:24px}
+  h1{font-size:22px;font-weight:800;margin-bottom:8px}
+  p{color:rgba(255,255,255,0.5);font-size:14px;max-width:280px;line-height:1.6;margin-bottom:28px}
+  button{background:#1ed760;color:#000;font-weight:700;font-size:14px;
+         border:none;border-radius:9999px;padding:14px 32px;cursor:pointer}
+  button:active{opacity:0.8}
+</style>
+</head>
+<body>
+  <div class="icon">🎵</div>
+  <h1>Kamu sedang offline</h1>
+  <p>Koneksi internet tidak tersedia. Lagu yang sudah diunduh masih bisa diputar.</p>
+  <button onclick="location.reload()">Coba Lagi</button>
+</body>
+</html>

@@ -934,8 +934,100 @@ function skipBy(sec){
 try { applyTheme(localStorage.getItem("sp_theme") || "green"); } catch {}
 </script>
 <script>
-window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); window.__bip = e; });
-window.addEventListener("appinstalled", () => { window.__bip = null; });
+window.addEventListener("beforeinstallprompt", (e) => {
+  e.preventDefault();
+  window.__bip = e;
+
+  // Auto-show install banner setelah 45 detik kalau belum pernah dismiss
+  const dismissed = (() => { try { return localStorage.getItem("pwa_install_dismissed"); } catch { return null; } })();
+  if (!dismissed) {
+    setTimeout(() => {
+      if (!window.__bip) return;
+      const isStandalone = window.matchMedia("(display-mode: standalone)").matches || navigator.standalone;
+      if (isStandalone) return;
+      showInstallBanner();
+    }, 45000);
+  }
+});
+
+window.addEventListener("appinstalled", () => {
+  window.__bip = null;
+  hideInstallBanner();
+  try { localStorage.setItem("pwa_installed", "1"); } catch {}
+  if (typeof toast === "function") toast("SoundXs berhasil diinstall! 🎉");
+});
+
+// ── Install Banner UI ──────────────────────────────────────
+function showInstallBanner() {
+  if (document.getElementById("pwa-install-banner")) return;
+  const banner = document.createElement("div");
+  banner.id = "pwa-install-banner";
+  banner.style.cssText = `
+    position:fixed;bottom:calc(80px + env(safe-area-inset-bottom,0px));left:50%;
+    transform:translateX(-50%);z-index:99998;
+    background:#1a1a1a;border:1px solid rgba(255,255,255,0.12);
+    border-radius:20px;padding:14px 18px;display:flex;align-items:center;gap:12px;
+    box-shadow:0 8px 32px rgba(0,0,0,0.6);max-width:calc(100vw - 32px);
+    animation:bannerIn .35s cubic-bezier(.34,1.56,.64,1);
+  `;
+  banner.innerHTML = `
+    <style>@keyframes bannerIn{from{opacity:0;transform:translateX(-50%) translateY(20px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}</style>
+    <img src="/android-chrome-192x192.png" style="width:40px;height:40px;border-radius:10px;flex-shrink:0">
+    <div style="min-width:0;flex:1">
+      <div style="font-size:13px;font-weight:700;color:#fff">Install SoundXs</div>
+      <div style="font-size:11px;color:rgba(255,255,255,0.5)">Tambahkan ke layar utama</div>
+    </div>
+    <button id="pwa-install-yes" style="background:#1ed760;color:#000;border:none;border-radius:9999px;padding:8px 16px;font-size:12px;font-weight:700;cursor:pointer;flex-shrink:0">Install</button>
+    <button id="pwa-install-no" style="background:none;border:none;color:rgba(255,255,255,0.4);font-size:20px;cursor:pointer;padding:0 4px;line-height:1">×</button>
+  `;
+  document.body.appendChild(banner);
+
+  document.getElementById("pwa-install-yes").addEventListener("click", () => {
+    installPWA();
+    hideInstallBanner();
+  });
+  document.getElementById("pwa-install-no").addEventListener("click", () => {
+    hideInstallBanner();
+    try { localStorage.setItem("pwa_install_dismissed", Date.now()); } catch {}
+  });
+}
+
+function hideInstallBanner() {
+  const b = document.getElementById("pwa-install-banner");
+  if (b) b.remove();
+}
+
+// ── Shortcut handler (dari SW message) ────────────────────
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.addEventListener("message", (e) => {
+    if (!e.data) return;
+    if (e.data.type === "shortcut") {
+      const v = e.data.value;
+      if (v === "search"  && typeof switchView === "function") switchView("search");
+      if (v === "foryou"  && typeof switchView === "function") switchView("home");
+      if (v === "library" && typeof switchView === "function") switchView("library");
+    }
+    if (e.data.type === "periodic-sync" && e.data.tag === "soundxs-refresh-picks") {
+      if (typeof loadMixedPicks === "function") loadMixedPicks().then(tracks => {
+        if (typeof renderQuickPicks === "function" && tracks.length) renderQuickPicks(tracks);
+      }).catch(() => {});
+    }
+  });
+}
+
+// ── URL shortcut saat buka dari icon ──────────────────────
+(function handleStartUrl() {
+  const p = new URLSearchParams(location.search);
+  const sc = p.get("shortcut");
+  if (!sc) return;
+  window.addEventListener("DOMContentLoaded", () => {
+    setTimeout(() => {
+      if (sc === "search"  && typeof switchView === "function") switchView("search");
+      if (sc === "foryou"  && typeof switchView === "function") switchView("home");
+      if (sc === "library" && typeof switchView === "function") switchView("library");
+    }, 800);
+  });
+})();
 function refreshOfflineCount(){
   const el = document.getElementById("offlineCount");
   if (el && typeof state !== "undefined") el.textContent = state.downloaded.length + " lagu";
@@ -3775,15 +3867,102 @@ async function installPWA() {
 }
 
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' }).then((reg) => {
+  navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' }).then(async (reg) => {
     const sw = document.getElementById("swStatus");
     if (sw) sw.textContent = "Terdaftar";
     reg.update().catch(() => {});
+
+    // Periodic background sync — refresh "Untuk kamu" setiap 12 jam
+    if ("periodicSync" in reg) {
+      try {
+        const status = await navigator.permissions.query({ name: "periodic-background-sync" });
+        if (status.state === "granted") {
+          await reg.periodicSync.register("soundxs-refresh-picks", { minInterval: 12 * 60 * 60 * 1000 });
+        }
+      } catch {}
+    }
+
+    // Cek update SW setiap 30 menit (agar user selalu dapat versi terbaru)
+    setInterval(() => reg.update().catch(() => {}), 30 * 60 * 1000);
+
+    // Kalau ada SW baru menunggu, reload otomatis
+    reg.addEventListener("updatefound", () => {
+      const newSW = reg.installing;
+      if (!newSW) return;
+      newSW.addEventListener("statechange", () => {
+        if (newSW.state === "installed" && navigator.serviceWorker.controller) {
+          newSW.postMessage({ type: "SKIP_WAITING" });
+          navigator.serviceWorker.addEventListener("controllerchange", () => {
+            window.location.reload();
+          }, { once: true });
+        }
+      });
+    });
+
   }).catch(() => {
     const sw = document.getElementById("swStatus");
     if (sw) sw.textContent = "Gagal";
   });
 }
+
+/* ── Audio Download/Offline API (dipanggil dari tombol ⬇ di lagu) ── */
+window.SoundXsOffline = (function() {
+  const CHANNEL = "soundxs-offline";
+  const _pending = new Map();
+
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.addEventListener("message", (e) => {
+      if (!e.data) return;
+      const { type, trackId, cached, error } = e.data;
+      const cb = _pending.get(trackId);
+      if (!cb) return;
+      if (type === "AUDIO_CACHED")     { cb({ ok: true,  cached: true });  _pending.delete(trackId); }
+      if (type === "AUDIO_CACHE_FAIL") { cb({ ok: false, error });         _pending.delete(trackId); }
+      if (type === "AUDIO_CACHE_STATUS") { cb({ cached }); _pending.delete(trackId); }
+      if (type === "AUDIO_CACHE_DELETED") { cb({ deleted: true }); _pending.delete(trackId); }
+    });
+  }
+
+  async function getSW() {
+    if (!("serviceWorker" in navigator)) return null;
+    return navigator.serviceWorker.ready.then(r => r.active || navigator.serviceWorker.controller);
+  }
+
+  async function send(msg) {
+    const sw = await getSW();
+    if (sw) sw.postMessage(msg);
+  }
+
+  return {
+    // Cache audio track untuk offline
+    async download(track, audioUrl) {
+      if (!track || !audioUrl) return { ok: false, error: "No URL" };
+      return new Promise((resolve) => {
+        _pending.set(String(track.id), resolve);
+        send({ type: "CACHE_AUDIO", url: audioUrl, trackId: String(track.id) });
+        setTimeout(() => { _pending.delete(String(track.id)); resolve({ ok: false, error: "timeout" }); }, 60000);
+      });
+    },
+    // Cek apakah track sudah di-cache
+    async isCached(track, audioUrl) {
+      if (!track || !audioUrl) return false;
+      return new Promise((resolve) => {
+        _pending.set(String(track.id), (r) => resolve(!!r.cached));
+        send({ type: "CHECK_AUDIO_CACHE", url: audioUrl, trackId: String(track.id) });
+        setTimeout(() => { _pending.delete(String(track.id)); resolve(false); }, 5000);
+      });
+    },
+    // Hapus dari cache
+    async remove(track, audioUrl) {
+      if (!track || !audioUrl) return;
+      return new Promise((resolve) => {
+        _pending.set(String(track.id), resolve);
+        send({ type: "DELETE_AUDIO_CACHE", url: audioUrl, trackId: String(track.id) });
+        setTimeout(() => { _pending.delete(String(track.id)); resolve({}); }, 5000);
+      });
+    }
+  };
+})();
 
 /* ============================================================
    BACKGROUND AUDIO PLAYBACK + MEDIA SESSION NOTIFICATION
@@ -3934,6 +4113,387 @@ if ('serviceWorker' in navigator) {
   });
 
   console.log("[MediaSession] Background audio + media session initialized");
+})();
+
+/* ============================================================
+   REAL DYNAMIC ISLAND — Notification + Picture-in-Picture
+   Tidak menyentuh logic/fungsi lain — hanya layer baru di atas
+============================================================ */
+(function() {
+  /* ── 1. NOTIFICATION API ──────────────────────────────────
+     Android: muncul di status bar & panel notifikasi
+     iOS Safari 16.4+ PWA: muncul di notification center
+  ──────────────────────────────────────────────────────────── */
+  let _notifActive = null;
+  let _notifTag    = "soundxs-player";
+  let _swReg       = null;
+
+  // Daftarkan Service Worker minimal agar notifikasi persistent di Android
+  async function ensureSW() {
+    if (!("serviceWorker" in navigator)) return null;
+    try {
+      // Gunakan SW yang sudah ada kalau ada, atau registrasikan inline blob
+      const existing = await navigator.serviceWorker.getRegistration("./");
+      if (existing) { _swReg = existing; return existing; }
+      // Buat SW minimal via blob URL
+      const swCode = `
+self.addEventListener("notificationclick", e => {
+  e.notification.close();
+  const action = e.action;
+  e.waitUntil(clients.matchAll({ type:"window" }).then(cs => {
+    const c = cs.find(x => x.focused || x.visibilityState === "visible") || cs[0];
+    if (c) {
+      c.focus();
+      c.postMessage({ type: "notif-action", action });
+    } else if (cs.length) cs[0].focus();
+    else clients.openWindow("/");
+  }));
+});
+self.addEventListener("message", e => {
+  if (e.data && e.data.type === "SKIP_WAITING") self.skipWaiting();
+});`;
+      const blob = new Blob([swCode], { type: "application/javascript" });
+      const url  = URL.createObjectURL(blob);
+      _swReg = await navigator.serviceWorker.register(url, { scope: "./" });
+      return _swReg;
+    } catch(e) { console.warn("[DI-Notif] SW reg failed:", e); return null; }
+  }
+
+  // Minta izin notifikasi — dipanggil sekali saat lagu pertama diputar
+  async function requestNotifPermission() {
+    if (!("Notification" in window)) return false;
+    if (Notification.permission === "granted") return true;
+    if (Notification.permission === "denied") return false;
+    const p = await Notification.requestPermission();
+    return p === "granted";
+  }
+
+  // Kirim/update notifikasi lagu
+  async function sendMediaNotif(track) {
+    if (!track) return;
+    const granted = await requestNotifPermission();
+    if (!granted) return;
+
+    const title  = track.title || "Now Playing";
+    const artist = (track.user && track.user.username) || "SoundXs";
+    const art    = (track.artwork_url || "").replace("-large", "-t300x300");
+    const opts   = {
+      tag:          _notifTag,          // replace notif sebelumnya (tidak tumpuk)
+      renotify:     false,
+      silent:       true,               // tidak ada suara/getaran dari notif
+      requireInteraction: false,
+      icon:         art || "/favicon.ico",
+      image:        art || undefined,
+      badge:        "/favicon.ico",
+      body:         artist,
+      data:         { trackId: track.id },
+      actions: [
+        { action: "prev",  title: "⏮", icon: "/favicon.ico" },
+        { action: "pause", title: audio.paused ? "▶" : "⏸", icon: "/favicon.ico" },
+        { action: "next",  title: "⏭", icon: "/favicon.ico" },
+      ],
+    };
+
+    try {
+      // Gunakan SW untuk notifikasi persistent (lebih baik di Android)
+      const reg = _swReg || await ensureSW();
+      if (reg && reg.showNotification) {
+        await reg.showNotification(title, opts);
+        _notifActive = true;
+        return;
+      }
+    } catch {}
+
+    // Fallback: Notification biasa (iOS Safari, desktop)
+    try {
+      if (_notifActive) _notifActive.close && _notifActive.close();
+      _notifActive = new Notification(title, opts);
+    } catch(e) { console.warn("[DI-Notif]", e); }
+  }
+
+  // Update teks play/pause di notifikasi saat state berubah
+  async function updateNotifPlayState() {
+    // Kirim ulang dengan track yang sama agar action button di-refresh
+    if (window._diLastTrack) sendMediaNotif(window._diLastTrack);
+  }
+
+  // Dengarkan pesan dari SW (klik tombol di notifikasi)
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.addEventListener("message", (e) => {
+      if (!e.data || e.data.type !== "notif-action") return;
+      const action = e.data.action;
+      if (action === "pause") {
+        if (audio.paused) audio.play().catch(() => {});
+        else audio.pause();
+      } else if (action === "next") {
+        if (typeof playNext === "function") playNext();
+      } else if (action === "prev") {
+        if (typeof playPrev === "function") playPrev();
+      }
+    });
+  }
+
+  audio.addEventListener("play",  updateNotifPlayState);
+  audio.addEventListener("pause", updateNotifPlayState);
+
+  /* ── 2. PICTURE-IN-PICTURE (floating overlay) ─────────────
+     Buat video element + canvas yang menggambar UI mini player
+     Lalu panggil requestPictureInPicture() → jendela kecil
+     bisa dibawa ke luar browser atau ke home screen
+  ──────────────────────────────────────────────────────────── */
+  let _pipVideo      = null;
+  let _pipCanvas     = null;
+  let _pipCtx        = null;
+  let _pipStream     = null;
+  let _pipRaf        = 0;
+  let _pipActive     = false;
+  let _pipImg        = new Image();
+  _pipImg.crossOrigin = "anonymous";
+
+  function createPipElements() {
+    if (_pipCanvas) return;
+    _pipCanvas = document.createElement("canvas");
+    _pipCanvas.width  = 480;
+    _pipCanvas.height = 160;
+    _pipCtx = _pipCanvas.getContext("2d");
+
+    _pipVideo = document.createElement("video");
+    _pipVideo.muted       = true;
+    _pipVideo.playsInline = true;
+    _pipVideo.style.cssText = "position:fixed;opacity:0;pointer-events:none;width:1px;height:1px;top:0;left:0;";
+    document.body.appendChild(_pipVideo);
+
+    _pipStream = _pipCanvas.captureStream(15); // 15fps cukup untuk UI statis
+    _pipVideo.srcObject = _pipStream;
+  }
+
+  function drawPip(track) {
+    if (!_pipCtx || !track) return;
+    const W = 480, H = 160;
+    const ctx = _pipCtx;
+
+    // Background gradien gelap
+    const grad = ctx.createLinearGradient(0, 0, W, H);
+    grad.addColorStop(0, "#1a1a2e");
+    grad.addColorStop(1, "#0d0d0d");
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, W, H);
+
+    // Artwork
+    const artSize = 112, artX = 24, artY = (H - artSize) / 2;
+    ctx.save();
+    ctx.beginPath();
+    ctx.roundRect(artX, artY, artSize, artSize, 16);
+    ctx.clip();
+    if (_pipImg.complete && _pipImg.naturalWidth > 0) {
+      ctx.drawImage(_pipImg, artX, artY, artSize, artSize);
+    } else {
+      ctx.fillStyle = "#333";
+      ctx.fillRect(artX, artY, artSize, artSize);
+    }
+    ctx.restore();
+
+    // Judul & artis
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "bold 22px system-ui, sans-serif";
+    ctx.fillText(truncate(ctx, track.title || "—", 280), 158, 60);
+
+    ctx.fillStyle = "rgba(255,255,255,0.55)";
+    ctx.font = "16px system-ui, sans-serif";
+    ctx.fillText(truncate(ctx, (track.user && track.user.username) || "", 280), 158, 86);
+
+    // Progress bar
+    const barX = 158, barY = 108, barW = 280, barH = 5;
+    ctx.fillStyle = "rgba(255,255,255,0.18)";
+    ctx.beginPath(); ctx.roundRect(barX, barY, barW, barH, 3); ctx.fill();
+    const dur = audio.duration || 1;
+    const pct = Math.min(1, (audio.currentTime || 0) / dur);
+    ctx.fillStyle = "#1db954";
+    ctx.beginPath(); ctx.roundRect(barX, barY, barW * pct, barH, 3); ctx.fill();
+
+    // Waktu
+    const fmtT = s => { s = Math.floor(s || 0); return Math.floor(s/60)+":"+(s%60<10?"0":"")+s%60; };
+    ctx.fillStyle = "rgba(255,255,255,0.4)";
+    ctx.font = "13px system-ui, sans-serif";
+    ctx.fillText(fmtT(audio.currentTime), barX, barY + 22);
+    ctx.textAlign = "right";
+    ctx.fillText(fmtT(audio.duration), barX + barW, barY + 22);
+    ctx.textAlign = "left";
+
+    // Status play/pause icon
+    ctx.fillStyle = "#1db954";
+    if (audio.paused) {
+      // ▶ triangle
+      ctx.beginPath();
+      ctx.moveTo(400, 55); ctx.lineTo(440, 76); ctx.lineTo(400, 97);
+      ctx.closePath(); ctx.fill();
+    } else {
+      // ⏸ dua garis
+      ctx.fillRect(398, 55, 13, 42);
+      ctx.fillRect(420, 55, 13, 42);
+    }
+
+    // Label SoundXs kecil
+    ctx.fillStyle = "rgba(255,255,255,0.22)";
+    ctx.font      = "11px system-ui, sans-serif";
+    ctx.fillText("SoundXs", barX, 142);
+  }
+
+  function truncate(ctx, text, maxW) {
+    if (ctx.measureText(text).width <= maxW) return text;
+    while (text.length > 1 && ctx.measureText(text + "…").width > maxW) text = text.slice(0, -1);
+    return text + "…";
+  }
+
+  function startPipDraw(track) {
+    if (!_pipCtx) return;
+    cancelAnimationFrame(_pipRaf);
+    _pipRaf = 0;
+    const loop = () => {
+      drawPip(track);
+      if (_pipActive) _pipRaf = requestAnimationFrame(loop);
+    };
+    _pipRaf = requestAnimationFrame(loop);
+  }
+
+  async function openPip(track) {
+    if (!("pictureInPictureEnabled" in document) || !document.pictureInPictureEnabled) {
+      // Browser tidak support PiP — fallback: hanya notifikasi
+      sendMediaNotif(track);
+      toast("PiP tidak didukung browser ini. Notifikasi sudah aktif ✓");
+      return;
+    }
+    createPipElements();
+
+    // Load artwork dulu
+    const artUrl = (track.artwork_url || "").replace("-large", "-t300x300");
+    if (artUrl && _pipImg.src !== artUrl) {
+      _pipImg.src = artUrl;
+      await new Promise(r => { _pipImg.onload = r; _pipImg.onerror = r; });
+    }
+
+    drawPip(track); // gambar frame awal sebelum PiP terbuka
+
+    try {
+      await _pipVideo.play();
+      await _pipVideo.requestPictureInPicture();
+      _pipActive = true;
+      startPipDraw(track);
+    } catch(e) {
+      console.warn("[DI-PiP]", e);
+      toast("Gagal membuka PiP — coba tap sekali di halaman dulu");
+    }
+
+    _pipVideo.addEventListener("leavepictureinpicture", () => {
+      _pipActive = false;
+      cancelAnimationFrame(_pipRaf);
+      _pipRaf = 0;
+    }, { once: false });
+  }
+
+  /* ── 3. TOMBOL DI DYNAMIC ISLAND ─────────────────────────
+     Tambahkan tombol kecil "🔔" dan "⧉" di collapsed pill
+     tanpa sentuh logic lain
+  ──────────────────────────────────────────────────────────── */
+  function injectDiBtns() {
+    const pill = document.querySelector("#dynamicIsland .di-pill");
+    if (!pill || pill.querySelector(".di-notif-btn")) return; // sudah ada
+
+    // Tambah CSS untuk tombol baru
+    const style = document.createElement("style");
+    style.textContent = `
+      .di-notif-btn, .di-pip-btn {
+        background: none; border: none; cursor: pointer;
+        display: flex; align-items: center; justify-content: center;
+        width: 26px; height: 26px; border-radius: 9999px;
+        color: rgba(255,255,255,0.65); font-size: 14px; flex-shrink: 0;
+        transition: color .15s ease, opacity .15s ease;
+        padding: 0;
+      }
+      .di-notif-btn:active, .di-pip-btn:active { opacity: .5; }
+      .di-notif-btn.granted { color: var(--a1, #1db954); }
+      /* Sembunyikan saat di-expanded — row3 sudah ada tombol sendiri */
+      #dynamicIsland .di-pill.di-exp .di-notif-btn,
+      #dynamicIsland .di-pill.di-exp .di-pip-btn { display: none; }
+    `;
+    document.head.appendChild(style);
+
+    // Tombol notifikasi 🔔
+    const notifBtn = document.createElement("button");
+    notifBtn.className = "di-notif-btn";
+    notifBtn.title     = "Aktifkan notifikasi";
+    notifBtn.setAttribute("aria-label", "Notifikasi");
+    notifBtn.innerHTML = "🔔";
+    if (Notification && Notification.permission === "granted") notifBtn.classList.add("granted");
+    notifBtn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      const ok = await requestNotifPermission();
+      if (ok) {
+        notifBtn.classList.add("granted");
+        notifBtn.innerHTML = "🔔";
+        if (window._diLastTrack) sendMediaNotif(window._diLastTrack);
+        toast("Notifikasi aktif ✓");
+      } else {
+        toast("Izin notifikasi ditolak — aktifkan di pengaturan browser");
+      }
+    });
+
+    // Tombol PiP ⧉
+    const pipBtn = document.createElement("button");
+    pipBtn.className = "di-pip-btn";
+    pipBtn.title     = "Buka di floating window";
+    pipBtn.setAttribute("aria-label", "Picture in Picture");
+    pipBtn.innerHTML = "⧉";
+    pipBtn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      if (window._diLastTrack) await openPip(window._diLastTrack);
+      else toast("Putar lagu dulu");
+    });
+
+    // Sisipkan sebelum di-eq (EQ bars) — urutan: art | meta | eq | 🔔 | ⧉
+    const eq = pill.querySelector(".di-eq");
+    if (eq) {
+      pill.insertBefore(notifBtn, eq);
+      pill.insertBefore(pipBtn, eq);
+    } else {
+      pill.appendChild(notifBtn);
+      pill.appendChild(pipBtn);
+    }
+  }
+
+  /* ── 4. HOOK KE spUpdateMediaSession ──────────────────────
+     Wrap fungsi yang sudah ada — tidak ubah logic di dalamnya
+  ──────────────────────────────────────────────────────────── */
+  const _origUpdate = window.spUpdateMediaSession || function() {};
+  window.spUpdateMediaSession = function(track) {
+    _origUpdate(track);              // jalankan logic asli dulu
+    if (!track) return;
+    window._diLastTrack = track;
+
+    // Update artwork PiP
+    const artUrl = (track.artwork_url || "").replace("-large", "-t300x300");
+    if (_pipImg && artUrl && _pipImg.src !== artUrl) {
+      _pipImg.src = artUrl;
+    }
+
+    // Kirim/update notifikasi kalau izin sudah diberikan
+    if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+      sendMediaNotif(track);
+    }
+  };
+
+  /* ── 5. INIT ──────────────────────────────────────────────*/
+  ensureSW();
+  // Inject tombol setelah DOM siap (DI pill mungkin belum di-show)
+  document.addEventListener("DOMContentLoaded", injectDiBtns);
+  // Kalau DOM sudah siap
+  if (document.readyState !== "loading") injectDiBtns();
+  // Fallback: inject saat DI pertama kali show
+  const _diObs = new MutationObserver(() => { injectDiBtns(); });
+  const diEl = document.getElementById("dynamicIsland");
+  if (diEl) _diObs.observe(diEl, { attributes: true, attributeFilter: ["class"] });
+
+  console.log("[DI-Real] Notification + PiP layer initialized");
 })();
 
 /* ============================================================
