@@ -1,0 +1,8 @@
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "app.vercel.soundxs_eight.twa",
+        "sha256_cert_fingerprints": ["BA:94:D8:B9:B9:9E:E4:5A:3E:F3:A3:1D:0B:FA:CF:8A:C2:C9:D5:CA:0C:13:4C:39:D4:2F:CD:3B:6A:4B:26:A5"]
+      }
+    }]
