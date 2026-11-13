@@ -660,7 +660,7 @@
 #bottomNav.minimized .lg-tab:not(.active) { flex: 0 0 0; width: 0; opacity: 0; pointer-events: none; }
 #bottomNav.minimized .lg-tab.active { flex: 0 0 66px; }
 
-#miniPlayer { bottom: 92px !important; transition: bottom .5s cubic-bezier(.22,1,.36,1); }
+/* #miniPlayer positioning handled by nav-minimized block below */
 
 @media (prefers-reduced-motion: reduce) {
   .lg-lens, .lg-pill, .lg-tab, .lg-tab svg { transition-duration: .01ms !important; }
@@ -700,7 +700,31 @@
   body.ui-original .lg-tab.active svg { transform:none; }
 
   body.nav-minimized #bottomNav { justify-content:flex-start; }
-  body.nav-minimized #miniPlayer { left:90px !important; bottom:calc(12px + env(safe-area-inset-bottom, 0px)) !important; transition:left .5s cubic-bezier(.22,1,.36,1), bottom .5s cubic-bezier(.22,1,.36,1); }
+
+  /* Mini player: posisi default (navbar full) */
+  #miniPlayer {
+    bottom: 92px !important;
+    left: 0 !important;
+    right: 0 !important;
+    transition:
+      bottom .5s cubic-bezier(.22,1,.36,1),
+      left   .5s cubic-bezier(.22,1,.36,1),
+      right  .5s cubic-bezier(.22,1,.36,1);
+  }
+
+  /* Mini player: saat navbar ngecil — geser kanan, nempel di samping bulatan */
+  body.nav-minimized #miniPlayer {
+    /* 16px margin kiri + 66px lebar pill bulat + 10px gap */
+    left:   calc(16px + 66px + 10px) !important;
+    right:  16px !important;
+    bottom: calc(max(env(safe-area-inset-bottom, 0px), 12px)) !important;
+  }
+
+  /* Mini card: saat minimized jadikan lebih compact — height turun */
+  body.nav-minimized #miniPlayer .mini-card {
+    padding: 8px 12px;
+    border-radius: 20px;
+  }
 
 
   /* ===== LIQUID GLASS · seluruh UI (hanya mode glass; Original tetap datar) ===== */
@@ -2189,30 +2213,60 @@ async function loadQuickPicks(query) {
   }
 }
 
-// Campuran lagu "Buat kamu": ada Hindia + indie + pop, tanpa dangdut/DJ/remix
-const PICKS_BLOCK = /\b(dj|remix|dangdut|koplo|jedag|jedug|breakbeat|fullbass|slowed)\b/i;
+// Campuran lagu "Buat kamu": random banyak genre, 50+ lagu, tanpa dangdut/DJ/remix
+const PICKS_BLOCK = /\b(dj|remix|dangdut|koplo|jedag|jedug|breakbeat|fullbass|slowed|karaoke|instrumental only)\b/i;
+
+// Semua pool query — setiap load diambil subset random agar hasilnya selalu beda
+const PICKS_POOL = [
+  "Hindia", "Feast", "Fourtwnty", "Float", "Reality Club",
+  "Payung Teduh payung", "Barasuara", "Efek Rumah Kaca",
+  "indie indonesia 2024", "indie indonesia 2025",
+  "pop indonesia terbaru", "lagu galau indonesia",
+  "pop melayu terbaik", "RAN band", "Juicy Luicy",
+  "Pamungkas music", "Yura Yunita", "Sal Priadi",
+  "Nadin Amizah", "Tiara Andini baru",
+  "jazz indonesia lofi", "acoustic indonesia",
+  "rock indonesia 2024", "pop alternatif indonesia",
+  "lagu santai viral", "lagu hits indonesia",
+  "Tulus music", "Raisa official", "Isyana Sarasvati",
+];
+
+function pickRandom(arr, n) {
+  const a = arr.slice().sort(() => Math.random() - .5);
+  return a.slice(0, n);
+}
+
 async function loadMixedPicks() {
-  const queries = ["Hindia", "indie indonesia", "pop indonesia", "lagu galau indonesia"];
-  const results = await Promise.allSettled(queries.map(q => apiClient.search(q)));
-  const lists = results.map(r => r.status === "fulfilled"
-    ? (r.value.collection || []).filter(t => t && t.title && !PICKS_BLOCK.test(t.title))
-    : []);
-  // Prioritaskan lagu yang memang dari Hindia
-  const hindia = lists[0].filter(t => /hindia/i.test((t.user && t.user.username) || ""));
-  if (hindia.length) lists[0] = hindia;
+  // Ambil 10 query random dari pool setiap kali load → hasil selalu beda
+  const chosen = pickRandom(PICKS_POOL, 10);
+  const results = await Promise.allSettled(chosen.map(q => apiClient.search(q)));
+
+  const lists = results.map(r => {
+    if (r.status !== "fulfilled") return [];
+    return (r.value.collection || [])
+      .filter(t => t && t.title && !PICKS_BLOCK.test(t.title));
+  });
+
+  // Interleave semua list secara random, target 50 lagu unik
   const seen = new Set(), out = [];
-  for (let i = 0; out.length < 12; i++) {
-    let any = false;
-    for (const l of lists) {
+  const maxDepth = Math.max(...lists.map(l => l.length));
+  for (let i = 0; i < maxDepth && out.length < 50; i++) {
+    // Acak urutan list di setiap iterasi → distribusi merata
+    const shuffledLists = lists.slice().sort(() => Math.random() - .5);
+    for (const l of shuffledLists) {
       if (i < l.length) {
-        any = true;
         const t = l[i];
-        if (!seen.has(t.id) && out.length < 12) { seen.add(t.id); out.push(t); }
+        if (!seen.has(t.id)) {
+          seen.add(t.id);
+          out.push(t);
+          if (out.length >= 50) break;
+        }
       }
     }
-    if (!any) break;
   }
-  return out;
+
+  // Final shuffle agar urutan benar-benar tidak predictable
+  return out.sort(() => Math.random() - .5);
 }
 
 function renderTrackList(list, containerId) {
@@ -2907,15 +2961,21 @@ function lyricOffset(delta) {
 /* ============================================================
    LIRIK: loop per frame (±60x/detik) + scroll halus
 ============================================================ */
-const LYRIC_LEAD = 0.2;   // tampil sedikit lebih awal supaya terasa pas dengan suara
+// LYRIC_LEAD: maju lebih besar agar highlight tidak telat
+// 0.9 dtk = kompensasi network/decode latency + render delay HP kentang
+const LYRIC_LEAD = 0.9;
 let _lastCT = -1, _lastPerf = 0, lyricRaf = 0, lyricScrollAnim = 0, lyricUserScrollUntil = 0;
+// Throttle: batasi loop ~30fps bukan 60fps agar tidak berat di HP kentang
+let _lastLyricFrame = 0;
+const LYRIC_FPS_INTERVAL = 1000 / 30; // ~33ms
 
 // currentTime di sebagian browser hanya naik ~4x/detik; interpolasi di antaranya
+// Max 2.0 dtk agar gap seek tidak salah interpolasi
 function lyricNow() {
   const ct = audio.currentTime, now = performance.now();
   if (ct !== _lastCT) { _lastCT = ct; _lastPerf = now; return ct; }
   if (audio.paused) return ct;
-  return ct + Math.min(0.3, (now - _lastPerf) / 1000) * (audio.playbackRate || 1);
+  return ct + Math.min(2.0, (now - _lastPerf) / 1000) * (audio.playbackRate || 1);
 }
 
 function lyricPanelVisible() {
@@ -2925,14 +2985,19 @@ function lyricPanelVisible() {
 
 function startLyricLoop() {
   if (lyricRaf) return;
-  const frame = () => {
+  const frame = (now) => {
     lyricRaf = 0;
     if (document.hidden || !state.lyricLines.length) return;
-    // tetap update highlight meski panel semi-tersembunyi supaya siap saat dibuka
+    // Throttle ke 30fps — cukup untuk highlight lirik, hemat CPU HP kentang
+    const elapsed = now - _lastLyricFrame;
+    if (elapsed < LYRIC_FPS_INTERVAL) {
+      lyricRaf = requestAnimationFrame(frame);
+      return;
+    }
+    _lastLyricFrame = now;
     if (!audio.paused && lyricPanelVisible()) {
       updateLyricHighlight();
     } else if (!audio.paused) {
-      // panel tertutup: hitung index saja tanpa scroll/DOM berat
       const t = lyricNow() + LYRIC_LEAD + state.lyricOffset;
       if (state.lyricTimes) state.currentLyricLine = lastLE(state.lyricTimes, t);
     }
@@ -2940,6 +3005,7 @@ function startLyricLoop() {
       lyricRaf = requestAnimationFrame(frame);
     }
   };
+  _lastLyricFrame = 0; // reset throttle timer setiap loop baru dimulai
   lyricRaf = requestAnimationFrame(frame);
 }
 
@@ -2961,17 +3027,25 @@ function scrollLyricsToActive(instant) {
 
   cancelAnimationFrame(lyricScrollAnim);
   lyricScrollAnim = 0;
-  if (instant) { box.scrollTop = target; return; }
-  if (performance.now() < lyricUserScrollUntil) return; // pengguna sedang scroll sendiri
 
+  // Langsung snap kalau: diminta instant, atau jarak > 220px (misalnya seek jauh)
+  const diff0 = target - box.scrollTop;
+  if (instant || Math.abs(diff0) > 220) { box.scrollTop = target; return; }
+  if (performance.now() < lyricUserScrollUntil) return;
+
+  // Smooth scroll ringan — pakai scrollTo native kalau tersedia (lebih efisien)
+  if (typeof box.scrollTo === "function" && "scrollBehavior" in document.documentElement.style) {
+    box.scrollTo({ top: target, behavior: "smooth" });
+    return;
+  }
+  // Fallback manual untuk browser lama
   let last = performance.now();
   const step = (now) => {
-    const dt = Math.min(0.05, (now - last) / 1000);
+    const dt = Math.min(0.06, (now - last) / 1000);
     last = now;
     const diff = target - box.scrollTop;
-    if (Math.abs(diff) < 1) { box.scrollTop = target; lyricScrollAnim = 0; return; }
-    // easing lebih lembut biar tidak loncat
-    box.scrollTop += diff * (1 - Math.exp(-dt * 9));
+    if (Math.abs(diff) < 1.5) { box.scrollTop = target; lyricScrollAnim = 0; return; }
+    box.scrollTop += diff * Math.min(1, dt * 7);
     lyricScrollAnim = requestAnimationFrame(step);
   };
   lyricScrollAnim = requestAnimationFrame(step);
