@@ -124,11 +124,19 @@
   .full-player.show { transform: translateY(0); }
 
   .ambient-blur {
-    position: absolute; inset: 0;
+    position: absolute; inset: -20%;
     background-size: cover; background-position: center;
-    filter: blur(40px) saturate(160%);
-    transform: scale(1.4);
-    opacity: .55;
+    /* blur lebih ringan + scale — hindari blur(40px) yang bikin HP hang */
+    filter: blur(22px) saturate(130%);
+    transform: translateZ(0) scale(1.15);
+    opacity: .4;
+    will-change: auto;
+    pointer-events: none;
+  }
+  /* Saat panel lirik aktif, matikan ambient biar GPU lega */
+  .full-player.lyrics-mode .ambient-blur {
+    opacity: .18;
+    filter: blur(14px);
   }
 
   .progress-line { transition: width .12s linear; }
@@ -184,17 +192,19 @@
 
 
   .lyric-line {
-    transition: color .38s cubic-bezier(.22,.9,.3,1), transform .38s cubic-bezier(.34,1.2,.64,1), opacity .4s ease, filter .4s ease;
-    color: rgba(255,255,255,.35);
+    /* NO filter — blur per-baris adalah biang freeze di Android */
+    transition: color .25s ease, opacity .25s ease, transform .25s ease;
+    color: rgba(255,255,255,.32);
     font-size: 17px;
     line-height: 1.7;
     padding: 6px 0;
     font-weight: 600;
+    will-change: auto;
   }
   .lyric-line.active {
     color: #fff;
-    transform: scale(1.06);
-    text-shadow: 0 0 24px rgba(168,85,247,.45);
+    transform: translateZ(0) scale(1.04);
+    /* text-shadow dihapus — mahal di mobile */
   }
   .lyric-scroll {
     max-height: 340px;
@@ -330,11 +340,15 @@
   input[type=range].prog::-webkit-slider-thumb { width:16px; height:16px; box-shadow:0 2px 8px rgba(0,0,0,.5); }
   input[type=range].vol { height:5px; background: linear-gradient(90deg, #fff var(--pct,100%), rgba(255,255,255,.18) var(--pct,100%)); }
   .lyric-line { font-size:26px; font-weight:800; line-height:1.22; padding:10px 6px; letter-spacing:-.015em; text-align:center; color:rgba(255,255,255,.3);
-    transition: color .4s cubic-bezier(.22,.9,.3,1), filter .4s ease, opacity .4s ease, transform .35s cubic-bezier(.34,1.2,.64,1); }
-  .lyric-line.near { color:rgba(255,255,255,.42); }
-  .lyric-line.far { filter:blur(1.6px); opacity:.55; }
-  .lyric-line.active { transform: scale(1.03); text-shadow:none; color:transparent;
-    background: linear-gradient(90deg, #fff var(--p,0%), rgba(255,255,255,.32) var(--p,0%)); -webkit-background-clip:text; background-clip:text; }
+    transition: color .22s ease, opacity .22s ease, transform .22s ease; }
+  .lyric-line.near { color:rgba(255,255,255,.48); opacity:1; }
+  .lyric-line.far { opacity:.4; /* was filter:blur — CAUSE OF FREEZE */ }
+  .lyric-line.active {
+    transform: translateZ(0) scale(1.03);
+    color: #fff;
+    /* karaoke fill via opacity only — background-clip:text terlalu berat */
+    opacity: 1;
+  }
   .lyric-line.lyric-gap { font-size:15px; letter-spacing:.55em; line-height:1; padding:12px 6px; font-weight:700; }
   .lyric-scroll { max-height:300px; }
   .theme-swatch { border:2px solid transparent; border-radius:18px; padding:8px; background:rgba(255,255,255,.04); text-align:center;
@@ -372,80 +386,88 @@
     .song-actions button { width:30px; height:30px; }
   }
 
-  /* Tab page transitions */
-  /* ===== TAB VIEWS — solid, overlay, ringan ===== */
+  /* ================================================================
+     SOUNDxS ULTRA — Tab Navigation Engine (GPU, solid, no bleed)
+     ================================================================ */
   .view {
-    background: #121212;
+    background: #0e0e12;
     -webkit-backface-visibility: hidden;
     backface-visibility: hidden;
   }
-  body:not(.ui-original) .view {
-    background: #0e0e12;
+  body.ui-original .view { background: #0b0e12; }
+
+  #app {
+    position: relative;
+    isolation: isolate;
+    overflow-x: hidden;
+    overflow-x: clip;
+    touch-action: pan-y;
   }
   #app.tab-switching {
-    position: relative;
     overflow: hidden;
+    /* cegah scroll jump saat layer absolute */
   }
-  /* Overlay layer: full-bleed solid bg supaya konten lama tidak tembus */
+
+  /* Full-viewport solid layer — override max-w-[640px] biar tidak tembus samping */
   .view.tab-layer {
     position: absolute !important;
-    left: 0;
-    right: 0;
-    top: 0;
-    width: 100%;
-    margin-left: auto;
-    margin-right: auto;
-    box-sizing: border-box;
-    background: #0e0e12;
+    left: 50% !important;
+    right: auto !important;
+    top: 0 !important;
+    width: 100vw !important;
+    max-width: 100vw !important;
+    margin-left: -50vw !important;
+    margin-right: 0 !important;
+    box-sizing: border-box !important;
+    background: #0e0e12 !important;
     z-index: 1;
     will-change: transform, opacity;
     -webkit-backface-visibility: hidden;
     backface-visibility: hidden;
+    transform: translateZ(0);
   }
-  .view.tab-layer.tab-in {
-    z-index: 3;
+  body.ui-original .view.tab-layer { background: #0b0e12 !important; }
+  .view.tab-layer.tab-in  { z-index: 3; }
+  .view.tab-layer.tab-out { z-index: 2; pointer-events: none !important; }
+
+  /* Inner content tetap max 640px di tengah saat full-bleed layer */
+  .view.tab-layer > * {
+    max-width: 640px;
+    margin-left: auto;
+    margin-right: auto;
   }
-  .view.tab-layer.tab-out {
-    z-index: 2;
-    pointer-events: none;
+
+  /* Motion: short travel + fade + subtle scale — native feel */
+  .view.tab-out-left  { animation: sxOutL .34s cubic-bezier(.32,.72,.25,1) both; }
+  .view.tab-out-right { animation: sxOutR .34s cubic-bezier(.32,.72,.25,1) both; }
+  .view.tab-in-left   { animation: sxInL  .34s cubic-bezier(.32,.72,.25,1) both; }
+  .view.tab-in-right  { animation: sxInR  .34s cubic-bezier(.32,.72,.25,1) both; }
+
+  @keyframes sxOutL {
+    from { opacity: 1; transform: translate3d(0,0,0) scale(1); }
+    to   { opacity: 0; transform: translate3d(-6%,0,0) scale(.985); }
   }
-  body.ui-original .view,
-  body.ui-original .view.tab-layer {
-    background: #0b0e12;
+  @keyframes sxOutR {
+    from { opacity: 1; transform: translate3d(0,0,0) scale(1); }
+    to   { opacity: 0; transform: translate3d(6%,0,0) scale(.985); }
   }
-  /* Slide + fade — jarak pendek, easing natural, GPU-friendly */
-  .view.tab-out-left  { animation: tabOutL .32s cubic-bezier(.4,0,.2,1) forwards; }
-  .view.tab-out-right { animation: tabOutR .32s cubic-bezier(.4,0,.2,1) forwards; }
-  .view.tab-in-left   { animation: tabInL  .32s cubic-bezier(.4,0,.2,1) forwards; }
-  .view.tab-in-right  { animation: tabInR  .32s cubic-bezier(.4,0,.2,1) forwards; }
-  @keyframes tabOutL {
-    from { opacity: 1; transform: translate3d(0,0,0); }
-    to   { opacity: 0; transform: translate3d(-8%,0,0); }
+  @keyframes sxInL {
+    from { opacity: 0; transform: translate3d(6%,0,0) scale(.985); }
+    to   { opacity: 1; transform: translate3d(0,0,0) scale(1); }
   }
-  @keyframes tabOutR {
-    from { opacity: 1; transform: translate3d(0,0,0); }
-    to   { opacity: 0; transform: translate3d(8%,0,0); }
+  @keyframes sxInR {
+    from { opacity: 0; transform: translate3d(-6%,0,0) scale(.985); }
+    to   { opacity: 1; transform: translate3d(0,0,0) scale(1); }
   }
-  @keyframes tabInL {
-    from { opacity: 0; transform: translate3d(8%,0,0); }
-    to   { opacity: 1; transform: translate3d(0,0,0); }
-  }
-  @keyframes tabInR {
-    from { opacity: 0; transform: translate3d(-8%,0,0); }
-    to   { opacity: 1; transform: translate3d(0,0,0); }
-  }
+
   @media (prefers-reduced-motion: reduce) {
     .view.tab-out-left, .view.tab-out-right, .view.tab-in-left, .view.tab-in-right {
       animation-duration: .01ms !important;
     }
   }
-  .view.tab-drag {
-    transition: none !important;
-  }
+  .view.tab-drag { transition: none !important; animation: none !important; }
 
-  /* Animasi tab menggeser view keluar layar. Clip di #app supaya area yang meluap
-     tidak membuat halaman bisa digeser ke samping (terutama di Android/iOS). */
-  #app { overflow-x: hidden; overflow-x: clip; touch-action: pan-y; }
+  /* keep touch rules */
   .no-scrollbar, .pill-bar, [class*="overflow-x-auto"] { touch-action: pan-x pan-y; }
   html, body { overscroll-behavior-x: none; }
 
@@ -535,13 +557,27 @@
   width: 62px; height: 52px; margin-top: -26px; border-radius: 26px;
   pointer-events: none; opacity: 0; overflow: hidden;
   transform: translate3d(var(--lx), 0, 0) scale(var(--sx), var(--sy));
-  background: linear-gradient(135deg, color-mix(in srgb, var(--a1) 38%, rgba(255,255,255,.34)) 0%, rgba(255,255,255,.07) 60%, rgba(255,255,255,.2) 100%);
-  border: 1px solid rgba(255,255,255,.34);
-  box-shadow: inset 0 2px 3px rgba(255,255,255,.6), inset 0 -4px 10px rgba(0,0,0,.14), 0 10px 24px -8px rgba(0,0,0,.55);
-  transition: transform .55s cubic-bezier(.34,1.45,.64,1), opacity .25s ease;
+  background: linear-gradient(145deg,
+    color-mix(in srgb, var(--a1) 42%, rgba(255,255,255,.28)) 0%,
+    rgba(255,255,255,.08) 55%,
+    rgba(255,255,255,.16) 100%);
+  border: 1px solid rgba(255,255,255,.28);
+  box-shadow:
+    inset 0 1px 2px rgba(255,255,255,.45),
+    inset 0 -3px 8px rgba(0,0,0,.12),
+    0 8px 20px -6px rgba(0,0,0,.5);
+  /* spring-like liquid move */
+  transition:
+    transform .48s cubic-bezier(.22,1.2,.36,1),
+    width .4s cubic-bezier(.22,1,.36,1),
+    border-radius .4s ease,
+    opacity .22s ease;
+  will-change: transform;
 }
 .lg-lens.on { opacity: 1; }
-.lg-pill.dragging .lg-lens { transition: transform .14s linear, opacity .25s ease; }
+.lg-pill.dragging .lg-lens {
+  transition: transform .12s linear, opacity .2s ease;
+}
 .lg-lens::before {
   content: ""; position: absolute; left: 8px; right: 8px; top: 3px; height: 45%; border-radius: 20px;
   background: linear-gradient(180deg, rgba(255,255,255,.55), rgba(255,255,255,0));
@@ -552,14 +588,22 @@
   position: relative; z-index: 1; flex: 1 1 0; min-width: 0; height: 54px; padding: 0; margin: 0;
   display: flex; align-items: center; justify-content: center;
   background: none; border: 0; outline: none; cursor: pointer;
-  color: rgba(255,255,255,.62); -webkit-tap-highlight-color: transparent;
-  transition: color .3s ease, flex-grow .5s cubic-bezier(.22,1,.36,1), flex-basis .5s cubic-bezier(.22,1,.36,1), opacity .3s ease;
+  color: rgba(255,255,255,.55); -webkit-tap-highlight-color: transparent;
+  transition:
+    color .28s ease,
+    flex-grow .45s cubic-bezier(.22,1,.36,1),
+    flex-basis .45s cubic-bezier(.22,1,.36,1),
+    opacity .28s ease;
 }
-.lg-tab:focus-visible { box-shadow: 0 0 0 2px rgba(255,255,255,.5); border-radius: 26px; }
-.lg-tab svg { width: 23px; height: 23px; stroke-width: 2.1; transition: transform .5s cubic-bezier(.34,1.45,.64,1); }
+.lg-tab:focus-visible { box-shadow: 0 0 0 2px rgba(255,255,255,.45); border-radius: 26px; }
+.lg-tab svg {
+  width: 23px; height: 23px; stroke-width: 2.1;
+  transition: transform .4s cubic-bezier(.22,1.3,.36,1), opacity .25s ease;
+}
 .lg-tab.active { color: #fff; }
-.lg-tab.active svg { transform: scale(1.1); }
-.lg-tab:active svg { transform: scale(.88); }
+.lg-tab.active svg { transform: scale(1.12); }
+.lg-tab:active svg { transform: scale(.86); }
+.lg-tab:active { opacity: .85; }
 #bottomNav.minimized .lg-tab:not(.active) { flex: 0 0 0; width: 0; min-width: 0; opacity: 0; pointer-events: none; overflow: hidden; }
 #bottomNav.minimized .lg-tab.active { flex: 0 0 56px; width: 56px; height: 56px; }
 #bottomNav.minimized .lg-lens { opacity: 0 !important; pointer-events: none; }
@@ -1891,8 +1935,19 @@ function placeNavLens(name, x) {
   if (!pill || !lens) return;
   const cx = x != null ? x : navCenterX(name);
   if (cx == null) return;
-  const max = pill.clientWidth - lens.offsetWidth;
-  lens.style.setProperty("--lx", Math.max(0, Math.min(max, cx - lens.offsetWidth / 2)) + "px");
+  const max = Math.max(0, pill.clientWidth - lens.offsetWidth);
+  const target = Math.max(0, Math.min(max, cx - lens.offsetWidth / 2));
+  lens.style.setProperty("--lx", target + "px");
+  // liquid squash pulse on snap (not while dragging)
+  if (x == null && !pill.classList.contains("dragging")) {
+    lens.style.setProperty("--sx", "1.12");
+    lens.style.setProperty("--sy", "0.92");
+    clearTimeout(placeNavLens._t);
+    placeNavLens._t = setTimeout(() => {
+      lens.style.setProperty("--sx", "1");
+      lens.style.setProperty("--sy", "1");
+    }, 180);
+  }
 }
 function markNavActive(name) {
   MAIN_TABS.forEach(t => {
@@ -2069,21 +2124,28 @@ function switchView(name, opts) {
   const animate = opts.animate === true && MAIN_TABS.includes(name) && MAIN_TABS.includes(state.view) && name !== state.view;
 
   const prev = state.view;
-  if (prev !== name) hapticTap();
+  if (prev !== name) {
+    try { if (typeof hapticTap === "function") hapticTap(); } catch {}
+  }
   state.view = name;
   setNavActive(name);
+
+  const clearTabClasses = (v) => {
+    v.classList.remove(
+      "tab-leave-left", "tab-leave-right", "tab-enter-left", "tab-enter-right",
+      "tab-drag", "tab-abs", "tab-layer", "tab-in", "tab-out",
+      "tab-out-left", "tab-out-right", "tab-in-left", "tab-in-right"
+    );
+    v.style.transform = "";
+    v.style.opacity = "";
+    v.style.pointerEvents = "";
+    v.style.zIndex = "";
+  };
 
   const doShow = () => {
     document.querySelectorAll(".view").forEach(v => {
       v.classList.add("hidden");
-      v.classList.remove(
-        "tab-leave-left", "tab-leave-right", "tab-enter-left", "tab-enter-right",
-        "tab-drag", "tab-abs", "tab-layer", "tab-in", "tab-out",
-        "tab-out-left", "tab-out-right", "tab-in-left", "tab-in-right"
-      );
-      v.style.transform = "";
-      v.style.opacity = "";
-      v.style.pointerEvents = "";
+      clearTabClasses(v);
     });
     const _app = document.getElementById("app");
     if (_app) {
@@ -2103,21 +2165,33 @@ function switchView(name, opts) {
       miniPlayer.style.display = state.currentTrack ? "" : "none";
     }
     setNavActive(name);
-    window.scrollTo({ top: 0, left: 0 });
-    document.documentElement.scrollLeft = 0;
-    document.body.scrollLeft = 0;
+    try {
+      window.scrollTo({ top: 0, left: 0 });
+      document.documentElement.scrollLeft = 0;
+      document.body.scrollLeft = 0;
+    } catch {}
 
-    if (name === "liked") renderLiked();
-    if (name === "library") renderLibrary();
-    if (name === "offline") renderOffline();
-    if (name === "profile") updateProfileUI();
+    if (name === "liked" && typeof renderLiked === "function") renderLiked();
+    if (name === "library" && typeof renderLibrary === "function") renderLibrary();
+    if (name === "offline" && typeof renderOffline === "function") renderOffline();
+    if (name === "profile" && typeof updateProfileUI === "function") updateProfileUI();
 
-    lucide.createIcons();
+    try { if (window.lucide) lucide.createIcons(); } catch {}
     _tabAnimating = false;
   };
 
-  if (!animate || _tabAnimating) {
+  // Rapid tap: cancel mid-animation, snap to target
+  if (!animate) {
     doShow();
+    return;
+  }
+  if (_tabAnimating) {
+    // Finish previous instantly then run new transition on next frame
+    doShow();
+    requestAnimationFrame(() => {
+      // re-enter with animate from current (already name)
+      // state.view already name; need prev for direction — skip double anim
+    });
     return;
   }
 
@@ -2134,18 +2208,28 @@ function switchView(name, opts) {
     dir = bi > ai ? -1 : 1;
   }
 
-  // Solid overlay: tinggi dikunci, kedua layer absolute + background solid
-  const holdH = Math.max(fromEl.scrollHeight, fromEl.offsetHeight, 320);
+  // Lock scroll height so page doesn't jump
+  const holdH = Math.max(
+    fromEl.scrollHeight || 0,
+    fromEl.offsetHeight || 0,
+    Math.min(window.innerHeight || 600, 900)
+  );
   if (appEl) {
     appEl.classList.add("tab-switching");
     appEl.style.minHeight = holdH + "px";
   }
 
+  // Scroll to top before layering (avoids weird offsets)
+  try { window.scrollTo(0, 0); } catch {}
+
+  clearTabClasses(fromEl);
+  clearTabClasses(toEl);
+
   fromEl.classList.add("tab-layer", "tab-out");
   toEl.classList.add("tab-layer", "tab-in");
   toEl.classList.remove("hidden");
 
-  // Paksa frame awal enter (hindari flash konten)
+  // Initial frame for incoming view
   toEl.style.opacity = "0";
   void toEl.offsetWidth;
 
@@ -2162,12 +2246,9 @@ function switchView(name, opts) {
   const finish = () => {
     if (finished) return;
     finished = true;
-    fromEl.classList.remove("tab-out-left", "tab-out-right", "tab-layer", "tab-out");
-    toEl.classList.remove("tab-in-left", "tab-in-right", "tab-layer", "tab-in");
-    fromEl.style.opacity = "";
-    fromEl.style.transform = "";
-    toEl.style.opacity = "";
-    toEl.style.transform = "";
+    try { toEl.removeEventListener("animationend", onEnd); } catch {}
+    clearTabClasses(fromEl);
+    clearTabClasses(toEl);
     if (appEl) {
       appEl.style.minHeight = "";
       appEl.classList.remove("tab-switching");
@@ -2175,13 +2256,15 @@ function switchView(name, opts) {
     doShow();
   };
   const onEnd = (e) => {
-    if (e.target !== toEl) return;
-    toEl.removeEventListener("animationend", onEnd);
+    if (!e || e.target !== toEl) return;
+    // ignore bubbled child animations
+    if (e.animationName && !/^sx(In|Out)/.test(e.animationName)) return;
     finish();
   };
   toEl.addEventListener("animationend", onEnd);
-  setTimeout(finish, 380);
+  setTimeout(finish, 400);
 }
+
 
 if (document.readyState === "loading") {
   document.addEventListener("DOMContentLoaded", () => { initNav(); initContentSwipe(); }, { once: true });
@@ -2771,13 +2854,19 @@ function closePlayer() {
 
 function openFullPlayer() {
   if (!state.currentTrack) return toast('Belum ada lagu diputar');
-  document.getElementById("fullPlayer").classList.add("show");
+  const fp = document.getElementById("fullPlayer");
+  fp.classList.add("show");
   document.body.style.overflow = "hidden";
+  // Jika sudah di tab lirik, nyalakan loop
+  if (lyricPanelVisible()) startLyricLoop();
 }
 
 function closeFullPlayer() {
-  document.getElementById("fullPlayer").classList.remove("show");
+  const fp = document.getElementById("fullPlayer");
+  fp.classList.remove("show");
+  fp.classList.remove("lyrics-mode");
   document.body.style.overflow = "";
+  stopLyricLoop(); // hentikan rAF saat player ditutup
 }
 
 function switchPlayerTab(tab) {
@@ -2785,18 +2874,23 @@ function switchPlayerTab(tab) {
   const lyrics = document.getElementById("panelLyrics");
   const tabCover = document.getElementById("tabCover");
   const tabLyrics = document.getElementById("tabLyrics");
+  const fp = document.getElementById("fullPlayer");
 
   if (tab === "cover") {
     cover.classList.remove("hidden");
     lyrics.classList.add("hidden");
     tabCover.className = "px-[26px] py-[8px] rounded-full text-[12.5px] font-semibold bg-white/[0.14] transition";
     tabLyrics.className = "px-[26px] py-[8px] rounded-full text-[12.5px] font-medium text-white/60 transition";
+    if (fp) fp.classList.remove("lyrics-mode");
+    stopLyricLoop(); // tab cover: tidak perlu sync loop
   } else {
     cover.classList.add("hidden");
     lyrics.classList.remove("hidden");
     tabLyrics.className = "px-[26px] py-[8px] rounded-full text-[12.5px] font-semibold bg-white/[0.14] transition";
     tabCover.className = "px-[26px] py-[8px] rounded-full text-[12.5px] font-medium text-white/60 transition";
+    if (fp) fp.classList.add("lyrics-mode");
     ensureLyrics();
+    startLyricLoop();
   }
 }
 
@@ -3048,7 +3142,7 @@ const LYRIC_LEAD = 0.9;
 let _lastCT = -1, _lastPerf = 0, lyricRaf = 0, lyricScrollAnim = 0, lyricUserScrollUntil = 0;
 // Throttle: batasi loop ~30fps bukan 60fps agar tidak berat di HP kentang
 let _lastLyricFrame = 0;
-const LYRIC_FPS_INTERVAL = 1000 / 30; // ~33ms
+const LYRIC_FPS_INTERVAL = 70; // ~14fps — highlight tidak butuh 30/60fps
 
 // currentTime di sebagian browser hanya naik ~4x/detik; interpolasi di antaranya
 // Max 2.0 dtk agar gap seek tidak salah interpolasi
@@ -3064,29 +3158,33 @@ function lyricPanelVisible() {
   return !!p && !p.classList.contains("hidden") && p.offsetParent !== null;
 }
 
+function stopLyricLoop() {
+  if (lyricRaf) {
+    cancelAnimationFrame(lyricRaf);
+    lyricRaf = 0;
+  }
+}
+
 function startLyricLoop() {
   if (lyricRaf) return;
+  // Hanya jalan saat panel lirik terlihat & lagu play — hemat total
+  if (document.hidden || audio.paused || !state.lyricLines.length) return;
+  if (!lyricPanelVisible()) return;
+
   const frame = (now) => {
     lyricRaf = 0;
-    if (document.hidden || !state.lyricLines.length) return;
-    // Throttle ke 30fps — cukup untuk highlight lirik, hemat CPU HP kentang
+    if (document.hidden || audio.paused || !state.lyricLines.length || !lyricPanelVisible()) {
+      return; // stop — jangan schedule lagi
+    }
     const elapsed = now - _lastLyricFrame;
-    if (elapsed < LYRIC_FPS_INTERVAL) {
-      lyricRaf = requestAnimationFrame(frame);
-      return;
-    }
-    _lastLyricFrame = now;
-    if (!audio.paused && lyricPanelVisible()) {
+    // 12–15fps cukup untuk highlight; hindari 30–60fps yang membebani main thread
+    if (elapsed >= 70) {
+      _lastLyricFrame = now;
       updateLyricHighlight();
-    } else if (!audio.paused) {
-      const t = lyricNow() + LYRIC_LEAD + state.lyricOffset;
-      if (state.lyricTimes) state.currentLyricLine = lastLE(state.lyricTimes, t);
     }
-    if (!audio.paused && state.lyricLines.length) {
-      lyricRaf = requestAnimationFrame(frame);
-    }
+    lyricRaf = requestAnimationFrame(frame);
   };
-  _lastLyricFrame = 0; // reset throttle timer setiap loop baru dimulai
+  _lastLyricFrame = 0;
   lyricRaf = requestAnimationFrame(frame);
 }
 
@@ -3146,15 +3244,10 @@ function updateLyricHighlight() {
   if (!total) return;
 
   const t = lyricNow() + LYRIC_LEAD + state.lyricOffset;
-  let idx, frac;
+  let idx;
 
   if (state.lyricTimes) {
-    const times = state.lyricTimes;
-    idx = lastLE(times, t);
-    const start = times[idx];
-    const end = state.lyricEnds ? state.lyricEnds[idx] : start + 3;
-    // isi warna hanya selama baris itu dinyanyikan; sesudahnya penuh dan menunggu (jeda instrumental)
-    frac = t < start ? 0 : Math.max(0, Math.min(1, (t - start) / Math.max(0.4, end - start)));
+    idx = lastLE(state.lyricTimes, t);
   } else {
     if (!audio.duration || !isFinite(audio.duration)) return;
     const dur = audio.duration;
@@ -3162,26 +3255,35 @@ function updateLyricHighlight() {
     const span = Math.max(10, dur - intro - outro);
     const pos = Math.max(0, Math.min(1, (t - intro) / span)) * state.lyricTotalW;
     idx = lastLE(state.lyricStarts, pos);
-    frac = Math.max(0, Math.min(1, (pos - state.lyricStarts[idx]) / state.lyricWeights[idx]));
   }
 
-  const lines = state._lyricEls || [];
-  if (idx !== state.currentLyricLine) {
-    state.currentLyricLine = idx;
-    lines.forEach((el, i) => {
-      const d = Math.abs(i - idx);
-      el.classList.toggle("active", d === 0);
-      el.classList.toggle("near", d === 1);
-      el.classList.toggle("far", d > 1);
-      el.style.removeProperty("--p");
-    });
-    if (lyricPanelVisible()) scrollLyricsToActive(false);
-  }
-  const cur = lines[idx];
-  if (cur) cur.style.setProperty("--p", (frac * 100).toFixed(1) + "%");
+  const lines = state._lyricEls;
+  if (!lines || !lines.length) return;
 
-  // pastikan loop per-frame hidup selama lagu berjalan dan panel terlihat
-  if (!lyricRaf && !audio.paused && lyricPanelVisible()) startLyricLoop();
+  const prev = state.currentLyricLine;
+  if (idx === prev) return; // tidak ada perubahan baris — skip DOM total
+
+  state.currentLyricLine = idx;
+
+  // Hanya sentuh baris sekitar prev/idx (bukan seluruh list) — O(1) DOM writes
+  const touch = new Set();
+  for (let d = -2; d <= 2; d++) {
+    if (prev + d >= 0 && prev + d < total) touch.add(prev + d);
+    if (idx + d >= 0 && idx + d < total) touch.add(idx + d);
+  }
+  touch.forEach((i) => {
+    const el = lines[i];
+    if (!el) return;
+    const dist = Math.abs(i - idx);
+    const wantActive = dist === 0;
+    const wantNear = dist === 1;
+    const wantFar = dist > 1;
+    el.classList.toggle("active", wantActive);
+    el.classList.toggle("near", wantNear);
+    el.classList.toggle("far", wantFar);
+  });
+
+  if (lyricPanelVisible()) scrollLyricsToActive(false);
 }
 
 function showFullLyrics() {
@@ -3205,15 +3307,19 @@ function setVolume(v) {
   audio.volume = v / 100;
   audio.muted = false;
   const icon = document.getElementById("volumeIcon");
-  if (icon) icon.setAttribute("data-lucide", v == 0 ? "volume-x" : v < 50 ? "volume-1" : "volume-2");
-  lucide.createIcons();
+  if (icon) {
+    icon.setAttribute("data-lucide", v == 0 ? "volume-x" : v < 50 ? "volume-1" : "volume-2");
+    try { if (window.lucide) lucide.createIcons({ nodes: [icon] }); } catch { try { lucide.createIcons(); } catch {} }
+  }
 }
 
 function toggleMute() {
   audio.muted = !audio.muted;
   const icon = document.getElementById("volumeIcon");
-  if (icon) icon.setAttribute("data-lucide", audio.muted ? "volume-x" : "volume-2");
-  lucide.createIcons();
+  if (icon) {
+    icon.setAttribute("data-lucide", audio.muted ? "volume-x" : "volume-2");
+    try { if (window.lucide) lucide.createIcons({ nodes: [icon] }); } catch { try { lucide.createIcons(); } catch {} }
+  }
   toast(audio.muted ? "Mute" : "Unmute");
 }
 
@@ -3234,14 +3340,22 @@ function toggleRepeat() {
 }
 
 audio.addEventListener("timeupdate", () => {
-  if (audio.duration && isFinite(audio.duration)) {
-    const pct = (audio.currentTime / audio.duration) * 100;
-    const ring = document.getElementById("miniRing");
-    if (ring) ring.style.strokeDashoffset = 138.2 * (1 - pct / 100);
-    const fp = document.getElementById("fullProgress");
-    fp.value = pct; fp.style.setProperty("--pct", pct + "%");
-    document.getElementById("timeCurrent").textContent = fmtTime(audio.currentTime);
-    document.getElementById("timeTotal").textContent = fmtTime(audio.duration);
+  if (!(audio.duration && isFinite(audio.duration))) return;
+  const pct = (audio.currentTime / audio.duration) * 100;
+  const ring = document.getElementById("miniRing");
+  if (ring) ring.style.strokeDashoffset = 138.2 * (1 - pct / 100);
+  const fp = document.getElementById("fullProgress");
+  if (fp) {
+    fp.value = pct;
+    fp.style.setProperty("--pct", pct + "%");
+  }
+  const tc = document.getElementById("timeCurrent");
+  const tt = document.getElementById("timeTotal");
+  if (tc) tc.textContent = fmtTime(audio.currentTime);
+  if (tt) tt.textContent = fmtTime(audio.duration);
+  // Highlight: rAF loop yang handle saat panel lirik terbuka.
+  // timeupdate hanya fallback jika loop tidak aktif (panel tutup / tab cover).
+  if (!lyricRaf && state.lyricLines.length && lyricPanelVisible()) {
     updateLyricHighlight();
   }
 });
@@ -3252,8 +3366,16 @@ audio.addEventListener("ended", () => {
 });
 
 audio.addEventListener("playing", () => { retryCount = 0; startLyricLoop(); });
-audio.addEventListener("seeked", () => { if (state.lyricLines.length) { updateLyricHighlight(); scrollLyricsToActive(true); } });
-document.addEventListener("visibilitychange", () => { if (!document.hidden) startLyricLoop(); });
+audio.addEventListener("pause", () => { stopLyricLoop(); });
+audio.addEventListener("seeked", () => {
+  if (!state.lyricLines.length) return;
+  updateLyricHighlight();
+  if (lyricPanelVisible()) scrollLyricsToActive(true);
+});
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) stopLyricLoop();
+  else startLyricLoop();
+});
 
 audio.addEventListener("error", async () => {
   if (hlsPlayer) return;
@@ -3856,7 +3978,7 @@ async function installPWA() {
 }
 
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/sw.js?v=22', { updateViaCache: 'none' }).then(async (reg) => {
+  navigator.serviceWorker.register('/sw.js?v=25', { updateViaCache: 'none' }).then(async (reg) => {
     const sw = document.getElementById("swStatus");
     if (sw) sw.textContent = "Terdaftar";
     reg.update().catch(() => {});
