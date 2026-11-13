@@ -236,7 +236,7 @@
     background-size:34px 34px;
     -webkit-mask-image: linear-gradient(180deg,#000,transparent 80%); mask-image: linear-gradient(180deg,#000,transparent 80%);
   }
-  #app { position:relative; z-index:1; }
+  #app { position:relative; z-index:1; min-height: 100%; overflow-x: clip; }
   .accent-bg { background: linear-gradient(135deg, var(--a1), var(--a2)); }
   .accent-text { color: var(--a3); }
   .grad-text { background: linear-gradient(90deg, var(--a1), var(--a2)); -webkit-background-clip:text; background-clip:text; color:transparent; }
@@ -373,37 +373,51 @@
 
   /* Tab page transitions */
   .view {
-    will-change: transform, opacity;
+    will-change: auto;
+  }
+  /* Saat ganti tab: dua view di-stack absolute biar tidak numpuk vertikal */
+  .view.tab-abs {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    width: 100%;
+    box-sizing: border-box;
+    pointer-events: none;
+    z-index: 1;
+  }
+  .view.tab-abs.tab-enter-left,
+  .view.tab-abs.tab-enter-right {
+    z-index: 2;
+    pointer-events: auto;
   }
   .view.tab-leave-left {
-    animation: tabLeaveLeft .42s cubic-bezier(.22,1,.36,1) forwards;
-    pointer-events: none;
+    animation: tabLeaveLeft .38s cubic-bezier(.22,1,.36,1) forwards;
   }
   .view.tab-leave-right {
-    animation: tabLeaveRight .42s cubic-bezier(.22,1,.36,1) forwards;
-    pointer-events: none;
+    animation: tabLeaveRight .38s cubic-bezier(.22,1,.36,1) forwards;
   }
   .view.tab-enter-left {
-    animation: tabEnterLeft .45s cubic-bezier(.22,1,.36,1) forwards;
+    animation: tabEnterLeft .38s cubic-bezier(.22,1,.36,1) forwards;
   }
   .view.tab-enter-right {
-    animation: tabEnterRight .45s cubic-bezier(.22,1,.36,1) forwards;
+    animation: tabEnterRight .38s cubic-bezier(.22,1,.36,1) forwards;
   }
   @keyframes tabLeaveLeft {
-    from { opacity:1; transform: translate3d(0,0,0); }
-    to   { opacity:0; transform: translate3d(-18%,0,0); }
+    from { opacity: 1; transform: translate3d(0,0,0); }
+    to   { opacity: 0; transform: translate3d(-12%,0,0); }
   }
   @keyframes tabLeaveRight {
-    from { opacity:1; transform: translate3d(0,0,0); }
-    to   { opacity:0; transform: translate3d(18%,0,0); }
+    from { opacity: 1; transform: translate3d(0,0,0); }
+    to   { opacity: 0; transform: translate3d(12%,0,0); }
   }
   @keyframes tabEnterLeft {
-    from { opacity:0; transform: translate3d(18%,0,0); }
-    to   { opacity:1; transform: translate3d(0,0,0); }
+    from { opacity: 0; transform: translate3d(12%,0,0); }
+    to   { opacity: 1; transform: translate3d(0,0,0); }
   }
   @keyframes tabEnterRight {
-    from { opacity:0; transform: translate3d(-18%,0,0); }
-    to   { opacity:1; transform: translate3d(0,0,0); }
+    from { opacity: 0; transform: translate3d(-12%,0,0); }
+    to   { opacity: 1; transform: translate3d(0,0,0); }
   }
   .view.tab-drag {
     transition: none !important;
@@ -2042,10 +2056,12 @@ function switchView(name, opts) {
   const doShow = () => {
     document.querySelectorAll(".view").forEach(v => {
       v.classList.add("hidden");
-      v.classList.remove("tab-leave-left", "tab-leave-right", "tab-enter-left", "tab-enter-right", "tab-drag");
+      v.classList.remove("tab-leave-left", "tab-leave-right", "tab-enter-left", "tab-enter-right", "tab-drag", "tab-abs");
       v.style.transform = "";
       v.style.opacity = "";
     });
+    const _app = document.getElementById("app");
+    if (_app) _app.style.minHeight = "";
     const el = document.getElementById("view-" + name);
     if (el) el.classList.remove("hidden");
 
@@ -2080,6 +2096,7 @@ function switchView(name, opts) {
   _tabAnimating = true;
   const fromEl = document.getElementById("view-" + prev);
   const toEl = document.getElementById("view-" + name);
+  const appEl = document.getElementById("app");
   if (!fromEl || !toEl) { doShow(); return; }
 
   let dir = direction;
@@ -2089,8 +2106,20 @@ function switchView(name, opts) {
     dir = bi > ai ? -1 : 1;
   }
 
+  // Kunci tinggi #app + absolute overlay — cegah dua halaman numpuk vertikal
+  const holdH = Math.max(fromEl.offsetHeight, window.innerHeight * 0.6);
+  if (appEl) appEl.style.minHeight = holdH + "px";
+
+  fromEl.classList.add("tab-abs");
+  toEl.classList.add("tab-abs");
   toEl.classList.remove("hidden");
-  void toEl.offsetWidth;
+
+  // Set posisi awal enter sebelum animasi (hindari flash)
+  toEl.style.opacity = "0";
+  toEl.style.transform = dir < 0 ? "translate3d(12%,0,0)" : "translate3d(-12%,0,0)";
+  void toEl.offsetWidth; // reflow
+  toEl.style.opacity = "";
+  toEl.style.transform = "";
 
   if (dir < 0) {
     fromEl.classList.add("tab-leave-left");
@@ -2100,9 +2129,17 @@ function switchView(name, opts) {
     toEl.classList.add("tab-enter-right");
   }
 
+  let finished = false;
   const finish = () => {
-    fromEl.classList.remove("tab-leave-left", "tab-leave-right");
-    toEl.classList.remove("tab-enter-left", "tab-enter-right");
+    if (finished) return;
+    finished = true;
+    fromEl.classList.remove("tab-leave-left", "tab-leave-right", "tab-abs");
+    toEl.classList.remove("tab-enter-left", "tab-enter-right", "tab-abs");
+    fromEl.style.opacity = "";
+    fromEl.style.transform = "";
+    toEl.style.opacity = "";
+    toEl.style.transform = "";
+    if (appEl) appEl.style.minHeight = "";
     doShow();
   };
   const onEnd = (e) => {
@@ -2111,12 +2148,7 @@ function switchView(name, opts) {
     finish();
   };
   toEl.addEventListener("animationend", onEnd);
-  setTimeout(() => {
-    if (_tabAnimating) {
-      toEl.removeEventListener("animationend", onEnd);
-      finish();
-    }
-  }, 420);
+  setTimeout(finish, 450);
 }
 
 if (document.readyState === "loading") {
