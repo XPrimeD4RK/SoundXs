@@ -42,7 +42,8 @@
 <script src="/soundxs-api-client.js"></script>
 <style>
   * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
-  html, body { height: 100%; overflow-x: hidden; }
+  html, body {
+    --page-bg: #121212; height: 100%; overflow-x: hidden; }
   body {
     background: #0b0e12;
     color: #fff;
@@ -372,52 +373,71 @@
   }
 
   /* Tab page transitions */
+  /* ===== TAB VIEWS — solid, overlay, ringan ===== */
   .view {
-    will-change: auto;
+    background: #121212;
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
   }
-  /* Saat ganti tab: dua view di-stack absolute biar tidak numpuk vertikal */
-  .view.tab-abs {
-    position: absolute;
+  body:not(.ui-original) .view {
+    background: #0e0e12;
+  }
+  #app.tab-switching {
+    position: relative;
+    overflow: hidden;
+  }
+  /* Overlay layer: full-bleed solid bg supaya konten lama tidak tembus */
+  .view.tab-layer {
+    position: absolute !important;
     left: 0;
     right: 0;
     top: 0;
     width: 100%;
+    margin-left: auto;
+    margin-right: auto;
     box-sizing: border-box;
-    pointer-events: none;
+    background: #0e0e12;
     z-index: 1;
+    will-change: transform, opacity;
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
   }
-  .view.tab-abs.tab-enter-left,
-  .view.tab-abs.tab-enter-right {
+  .view.tab-layer.tab-in {
+    z-index: 3;
+  }
+  .view.tab-layer.tab-out {
     z-index: 2;
-    pointer-events: auto;
+    pointer-events: none;
   }
-  .view.tab-leave-left {
-    animation: tabLeaveLeft .38s cubic-bezier(.22,1,.36,1) forwards;
+  body.ui-original .view,
+  body.ui-original .view.tab-layer {
+    background: #0b0e12;
   }
-  .view.tab-leave-right {
-    animation: tabLeaveRight .38s cubic-bezier(.22,1,.36,1) forwards;
-  }
-  .view.tab-enter-left {
-    animation: tabEnterLeft .38s cubic-bezier(.22,1,.36,1) forwards;
-  }
-  .view.tab-enter-right {
-    animation: tabEnterRight .38s cubic-bezier(.22,1,.36,1) forwards;
-  }
-  @keyframes tabLeaveLeft {
+  /* Slide + fade — jarak pendek, easing natural, GPU-friendly */
+  .view.tab-out-left  { animation: tabOutL .32s cubic-bezier(.4,0,.2,1) forwards; }
+  .view.tab-out-right { animation: tabOutR .32s cubic-bezier(.4,0,.2,1) forwards; }
+  .view.tab-in-left   { animation: tabInL  .32s cubic-bezier(.4,0,.2,1) forwards; }
+  .view.tab-in-right  { animation: tabInR  .32s cubic-bezier(.4,0,.2,1) forwards; }
+  @keyframes tabOutL {
     from { opacity: 1; transform: translate3d(0,0,0); }
-    to   { opacity: 0; transform: translate3d(-12%,0,0); }
+    to   { opacity: 0; transform: translate3d(-8%,0,0); }
   }
-  @keyframes tabLeaveRight {
+  @keyframes tabOutR {
     from { opacity: 1; transform: translate3d(0,0,0); }
-    to   { opacity: 0; transform: translate3d(12%,0,0); }
+    to   { opacity: 0; transform: translate3d(8%,0,0); }
   }
-  @keyframes tabEnterLeft {
-    from { opacity: 0; transform: translate3d(12%,0,0); }
+  @keyframes tabInL {
+    from { opacity: 0; transform: translate3d(8%,0,0); }
     to   { opacity: 1; transform: translate3d(0,0,0); }
   }
-  @keyframes tabEnterRight {
-    from { opacity: 0; transform: translate3d(-12%,0,0); }
+  @keyframes tabInR {
+    from { opacity: 0; transform: translate3d(-8%,0,0); }
     to   { opacity: 1; transform: translate3d(0,0,0); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .view.tab-out-left, .view.tab-out-right, .view.tab-in-left, .view.tab-in-right {
+      animation-duration: .01ms !important;
+    }
   }
   .view.tab-drag {
     transition: none !important;
@@ -2056,12 +2076,20 @@ function switchView(name, opts) {
   const doShow = () => {
     document.querySelectorAll(".view").forEach(v => {
       v.classList.add("hidden");
-      v.classList.remove("tab-leave-left", "tab-leave-right", "tab-enter-left", "tab-enter-right", "tab-drag", "tab-abs");
+      v.classList.remove(
+        "tab-leave-left", "tab-leave-right", "tab-enter-left", "tab-enter-right",
+        "tab-drag", "tab-abs", "tab-layer", "tab-in", "tab-out",
+        "tab-out-left", "tab-out-right", "tab-in-left", "tab-in-right"
+      );
       v.style.transform = "";
       v.style.opacity = "";
+      v.style.pointerEvents = "";
     });
     const _app = document.getElementById("app");
-    if (_app) _app.style.minHeight = "";
+    if (_app) {
+      _app.style.minHeight = "";
+      _app.classList.remove("tab-switching");
+    }
     const el = document.getElementById("view-" + name);
     if (el) el.classList.remove("hidden");
 
@@ -2106,40 +2134,44 @@ function switchView(name, opts) {
     dir = bi > ai ? -1 : 1;
   }
 
-  // Kunci tinggi #app + absolute overlay — cegah dua halaman numpuk vertikal
-  const holdH = Math.max(fromEl.offsetHeight, window.innerHeight * 0.6);
-  if (appEl) appEl.style.minHeight = holdH + "px";
+  // Solid overlay: tinggi dikunci, kedua layer absolute + background solid
+  const holdH = Math.max(fromEl.scrollHeight, fromEl.offsetHeight, 320);
+  if (appEl) {
+    appEl.classList.add("tab-switching");
+    appEl.style.minHeight = holdH + "px";
+  }
 
-  fromEl.classList.add("tab-abs");
-  toEl.classList.add("tab-abs");
+  fromEl.classList.add("tab-layer", "tab-out");
+  toEl.classList.add("tab-layer", "tab-in");
   toEl.classList.remove("hidden");
 
-  // Set posisi awal enter sebelum animasi (hindari flash)
+  // Paksa frame awal enter (hindari flash konten)
   toEl.style.opacity = "0";
-  toEl.style.transform = dir < 0 ? "translate3d(12%,0,0)" : "translate3d(-12%,0,0)";
-  void toEl.offsetWidth; // reflow
-  toEl.style.opacity = "";
-  toEl.style.transform = "";
+  void toEl.offsetWidth;
 
   if (dir < 0) {
-    fromEl.classList.add("tab-leave-left");
-    toEl.classList.add("tab-enter-left");
+    fromEl.classList.add("tab-out-left");
+    toEl.classList.add("tab-in-left");
   } else {
-    fromEl.classList.add("tab-leave-right");
-    toEl.classList.add("tab-enter-right");
+    fromEl.classList.add("tab-out-right");
+    toEl.classList.add("tab-in-right");
   }
+  toEl.style.opacity = "";
 
   let finished = false;
   const finish = () => {
     if (finished) return;
     finished = true;
-    fromEl.classList.remove("tab-leave-left", "tab-leave-right", "tab-abs");
-    toEl.classList.remove("tab-enter-left", "tab-enter-right", "tab-abs");
+    fromEl.classList.remove("tab-out-left", "tab-out-right", "tab-layer", "tab-out");
+    toEl.classList.remove("tab-in-left", "tab-in-right", "tab-layer", "tab-in");
     fromEl.style.opacity = "";
     fromEl.style.transform = "";
     toEl.style.opacity = "";
     toEl.style.transform = "";
-    if (appEl) appEl.style.minHeight = "";
+    if (appEl) {
+      appEl.style.minHeight = "";
+      appEl.classList.remove("tab-switching");
+    }
     doShow();
   };
   const onEnd = (e) => {
@@ -2148,7 +2180,7 @@ function switchView(name, opts) {
     finish();
   };
   toEl.addEventListener("animationend", onEnd);
-  setTimeout(finish, 450);
+  setTimeout(finish, 380);
 }
 
 if (document.readyState === "loading") {
