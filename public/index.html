@@ -376,34 +376,34 @@
     will-change: transform, opacity;
   }
   .view.tab-leave-left {
-    animation: tabLeaveLeft .32s cubic-bezier(.22,.9,.3,1) forwards;
+    animation: tabLeaveLeft .42s cubic-bezier(.22,1,.36,1) forwards;
     pointer-events: none;
   }
   .view.tab-leave-right {
-    animation: tabLeaveRight .32s cubic-bezier(.22,.9,.3,1) forwards;
+    animation: tabLeaveRight .42s cubic-bezier(.22,1,.36,1) forwards;
     pointer-events: none;
   }
   .view.tab-enter-left {
-    animation: tabEnterLeft .34s cubic-bezier(.22,.9,.3,1) forwards;
+    animation: tabEnterLeft .45s cubic-bezier(.22,1,.36,1) forwards;
   }
   .view.tab-enter-right {
-    animation: tabEnterRight .34s cubic-bezier(.22,.9,.3,1) forwards;
+    animation: tabEnterRight .45s cubic-bezier(.22,1,.36,1) forwards;
   }
   @keyframes tabLeaveLeft {
-    from { opacity:1; transform: translateX(0); }
-    to   { opacity:0; transform: translateX(-28%); }
+    from { opacity:1; transform: translate3d(0,0,0); }
+    to   { opacity:0; transform: translate3d(-18%,0,0); }
   }
   @keyframes tabLeaveRight {
-    from { opacity:1; transform: translateX(0); }
-    to   { opacity:0; transform: translateX(28%); }
+    from { opacity:1; transform: translate3d(0,0,0); }
+    to   { opacity:0; transform: translate3d(18%,0,0); }
   }
   @keyframes tabEnterLeft {
-    from { opacity:0; transform: translateX(28%); }
-    to   { opacity:1; transform: translateX(0); }
+    from { opacity:0; transform: translate3d(18%,0,0); }
+    to   { opacity:1; transform: translate3d(0,0,0); }
   }
   @keyframes tabEnterRight {
-    from { opacity:0; transform: translateX(-28%); }
-    to   { opacity:1; transform: translateX(0); }
+    from { opacity:0; transform: translate3d(-18%,0,0); }
+    to   { opacity:1; transform: translate3d(0,0,0); }
   }
   .view.tab-drag {
     transition: none !important;
@@ -749,8 +749,7 @@
   .tap { transition: transform .25s cubic-bezier(.22,1,.36,1); }
   .tap:active { transform: scale(.97); }
   @keyframes riseIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
-  body:not(.ui-original) .view:not(.hidden) > * { animation: riseIn .35s cubic-bezier(.22,1,.36,1) backwards; }
-  body:not(.ui-original) .view:not(.hidden) > *:nth-child(n+4) { animation: none; }
+  /* no staggered riseIn — biar transisi tab bersih */
   body:not(.ui-original) input:focus, body:not(.ui-original) textarea:focus {
     box-shadow: 0 0 0 2px color-mix(in srgb, var(--a1) 35%, transparent) !important;
   }
@@ -3793,7 +3792,7 @@ async function installPWA() {
 }
 
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' }).then(async (reg) => {
+  navigator.serviceWorker.register('/sw.js?v=22', { updateViaCache: 'none' }).then(async (reg) => {
     const sw = document.getElementById("swStatus");
     if (sw) sw.textContent = "Terdaftar";
     reg.update().catch(() => {});
@@ -4041,313 +4040,7 @@ window.SoundXsOffline = (function() {
   console.log("[MediaSession] Background audio + media session initialized");
 })();
 
-/* ============================================================
-   MEDIA NOTIFICATION + Picture-in-Picture
-   (Dynamic Island UI dihapus — notif & PiP tetap)
-============================================================ */
-(function() {
-  /* ── 1. NOTIFICATION API ──────────────────────────────────
-     Android: muncul di status bar & panel notifikasi
-     iOS Safari 16.4+ PWA: muncul di notification center
-  ──────────────────────────────────────────────────────────── */
-  let _notifActive = null;
-  let _notifTag    = "soundxs-player";
-  let _swReg       = null;
-
-  // Daftarkan Service Worker minimal agar notifikasi persistent di Android
-  async function ensureSW() {
-    if (!("serviceWorker" in navigator)) return null;
-    try {
-      // Gunakan SW yang sudah ada kalau ada, atau registrasikan inline blob
-      const existing = await navigator.serviceWorker.getRegistration("./");
-      if (existing) { _swReg = existing; return existing; }
-      // Buat SW minimal via blob URL
-      const swCode = `
-self.addEventListener("notificationclick", e => {
-  e.notification.close();
-  const action = e.action;
-  e.waitUntil(clients.matchAll({ type:"window" }).then(cs => {
-    const c = cs.find(x => x.focused || x.visibilityState === "visible") || cs[0];
-    if (c) {
-      c.focus();
-      c.postMessage({ type: "notif-action", action });
-    } else if (cs.length) cs[0].focus();
-    else clients.openWindow("/");
-  }));
-});
-self.addEventListener("message", e => {
-  if (e.data && e.data.type === "SKIP_WAITING") self.skipWaiting();
-});`;
-      const blob = new Blob([swCode], { type: "application/javascript" });
-      const url  = URL.createObjectURL(blob);
-      _swReg = await navigator.serviceWorker.register(url, { scope: "./" });
-      return _swReg;
-    } catch(e) { console.warn("[DI-Notif] SW reg failed:", e); return null; }
-  }
-
-  // Minta izin notifikasi — dipanggil sekali saat lagu pertama diputar
-  async function requestNotifPermission() {
-    if (!("Notification" in window)) return false;
-    if (Notification.permission === "granted") return true;
-    if (Notification.permission === "denied") return false;
-    const p = await Notification.requestPermission();
-    return p === "granted";
-  }
-
-  // Kirim/update notifikasi lagu
-  async function sendMediaNotif(track) {
-    if (!track) return;
-    const granted = await requestNotifPermission();
-    if (!granted) return;
-
-    const title  = track.title || "Now Playing";
-    const artist = (track.user && track.user.username) || "SoundXs";
-    const art    = (track.artwork_url || "").replace("-large", "-t300x300");
-    const opts   = {
-      tag:          _notifTag,          // replace notif sebelumnya (tidak tumpuk)
-      renotify:     false,
-      silent:       true,               // tidak ada suara/getaran dari notif
-      requireInteraction: false,
-      icon:         art || "/favicon.ico",
-      image:        art || undefined,
-      badge:        "/favicon.ico",
-      body:         artist,
-      data:         { trackId: track.id },
-      actions: [
-        { action: "prev",  title: "⏮", icon: "/favicon.ico" },
-        { action: "pause", title: audio.paused ? "▶" : "⏸", icon: "/favicon.ico" },
-        { action: "next",  title: "⏭", icon: "/favicon.ico" },
-      ],
-    };
-
-    try {
-      // Gunakan SW untuk notifikasi persistent (lebih baik di Android)
-      const reg = _swReg || await ensureSW();
-      if (reg && reg.showNotification) {
-        await reg.showNotification(title, opts);
-        _notifActive = true;
-        return;
-      }
-    } catch {}
-
-    // Fallback: Notification biasa (iOS Safari, desktop)
-    try {
-      if (_notifActive) _notifActive.close && _notifActive.close();
-      _notifActive = new Notification(title, opts);
-    } catch(e) { console.warn("[DI-Notif]", e); }
-  }
-
-  // Update teks play/pause di notifikasi saat state berubah
-  async function updateNotifPlayState() {
-    // Kirim ulang dengan track yang sama agar action button di-refresh
-    if (window._diLastTrack) sendMediaNotif(window._diLastTrack);
-  }
-
-  // Dengarkan pesan dari SW (klik tombol di notifikasi)
-  if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.addEventListener("message", (e) => {
-      if (!e.data || e.data.type !== "notif-action") return;
-      const action = e.data.action;
-      if (action === "pause") {
-        if (audio.paused) audio.play().catch(() => {});
-        else audio.pause();
-      } else if (action === "next") {
-        if (typeof playNext === "function") playNext();
-      } else if (action === "prev") {
-        if (typeof playPrev === "function") playPrev();
-      }
-    });
-  }
-
-  audio.addEventListener("play",  updateNotifPlayState);
-  audio.addEventListener("pause", updateNotifPlayState);
-
-  /* ── 2. PICTURE-IN-PICTURE (floating overlay) ─────────────
-     Buat video element + canvas yang menggambar UI mini player
-     Lalu panggil requestPictureInPicture() → jendela kecil
-     bisa dibawa ke luar browser atau ke home screen
-  ──────────────────────────────────────────────────────────── */
-  let _pipVideo      = null;
-  let _pipCanvas     = null;
-  let _pipCtx        = null;
-  let _pipStream     = null;
-  let _pipRaf        = 0;
-  let _pipActive     = false;
-  let _pipImg        = new Image();
-  _pipImg.crossOrigin = "anonymous";
-
-  function createPipElements() {
-    if (_pipCanvas) return;
-    _pipCanvas = document.createElement("canvas");
-    _pipCanvas.width  = 480;
-    _pipCanvas.height = 160;
-    _pipCtx = _pipCanvas.getContext("2d");
-
-    _pipVideo = document.createElement("video");
-    _pipVideo.muted       = true;
-    _pipVideo.playsInline = true;
-    _pipVideo.style.cssText = "position:fixed;opacity:0;pointer-events:none;width:1px;height:1px;top:0;left:0;";
-    document.body.appendChild(_pipVideo);
-
-    _pipStream = _pipCanvas.captureStream(15); // 15fps cukup untuk UI statis
-    _pipVideo.srcObject = _pipStream;
-  }
-
-  function drawPip(track) {
-    if (!_pipCtx || !track) return;
-    const W = 480, H = 160;
-    const ctx = _pipCtx;
-
-    // Background gradien gelap
-    const grad = ctx.createLinearGradient(0, 0, W, H);
-    grad.addColorStop(0, "#1a1a2e");
-    grad.addColorStop(1, "#0d0d0d");
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, W, H);
-
-    // Artwork
-    const artSize = 112, artX = 24, artY = (H - artSize) / 2;
-    ctx.save();
-    ctx.beginPath();
-    ctx.roundRect(artX, artY, artSize, artSize, 16);
-    ctx.clip();
-    if (_pipImg.complete && _pipImg.naturalWidth > 0) {
-      ctx.drawImage(_pipImg, artX, artY, artSize, artSize);
-    } else {
-      ctx.fillStyle = "#333";
-      ctx.fillRect(artX, artY, artSize, artSize);
-    }
-    ctx.restore();
-
-    // Judul & artis
-    ctx.fillStyle = "#ffffff";
-    ctx.font = "bold 22px system-ui, sans-serif";
-    ctx.fillText(truncate(ctx, track.title || "—", 280), 158, 60);
-
-    ctx.fillStyle = "rgba(255,255,255,0.55)";
-    ctx.font = "16px system-ui, sans-serif";
-    ctx.fillText(truncate(ctx, (track.user && track.user.username) || "", 280), 158, 86);
-
-    // Progress bar
-    const barX = 158, barY = 108, barW = 280, barH = 5;
-    ctx.fillStyle = "rgba(255,255,255,0.18)";
-    ctx.beginPath(); ctx.roundRect(barX, barY, barW, barH, 3); ctx.fill();
-    const dur = audio.duration || 1;
-    const pct = Math.min(1, (audio.currentTime || 0) / dur);
-    ctx.fillStyle = "#1db954";
-    ctx.beginPath(); ctx.roundRect(barX, barY, barW * pct, barH, 3); ctx.fill();
-
-    // Waktu
-    const fmtT = s => { s = Math.floor(s || 0); return Math.floor(s/60)+":"+(s%60<10?"0":"")+s%60; };
-    ctx.fillStyle = "rgba(255,255,255,0.4)";
-    ctx.font = "13px system-ui, sans-serif";
-    ctx.fillText(fmtT(audio.currentTime), barX, barY + 22);
-    ctx.textAlign = "right";
-    ctx.fillText(fmtT(audio.duration), barX + barW, barY + 22);
-    ctx.textAlign = "left";
-
-    // Status play/pause icon
-    ctx.fillStyle = "#1db954";
-    if (audio.paused) {
-      // ▶ triangle
-      ctx.beginPath();
-      ctx.moveTo(400, 55); ctx.lineTo(440, 76); ctx.lineTo(400, 97);
-      ctx.closePath(); ctx.fill();
-    } else {
-      // ⏸ dua garis
-      ctx.fillRect(398, 55, 13, 42);
-      ctx.fillRect(420, 55, 13, 42);
-    }
-
-    // Label SoundXs kecil
-    ctx.fillStyle = "rgba(255,255,255,0.22)";
-    ctx.font      = "11px system-ui, sans-serif";
-    ctx.fillText("SoundXs", barX, 142);
-  }
-
-  function truncate(ctx, text, maxW) {
-    if (ctx.measureText(text).width <= maxW) return text;
-    while (text.length > 1 && ctx.measureText(text + "…").width > maxW) text = text.slice(0, -1);
-    return text + "…";
-  }
-
-  function startPipDraw(track) {
-    if (!_pipCtx) return;
-    cancelAnimationFrame(_pipRaf);
-    _pipRaf = 0;
-    const loop = () => {
-      drawPip(track);
-      if (_pipActive) _pipRaf = requestAnimationFrame(loop);
-    };
-    _pipRaf = requestAnimationFrame(loop);
-  }
-
-  async function openPip(track) {
-    if (!("pictureInPictureEnabled" in document) || !document.pictureInPictureEnabled) {
-      // Browser tidak support PiP — fallback: hanya notifikasi
-      sendMediaNotif(track);
-      toast("PiP tidak didukung browser ini. Notifikasi sudah aktif ✓");
-      return;
-    }
-    createPipElements();
-
-    // Load artwork dulu
-    const artUrl = (track.artwork_url || "").replace("-large", "-t300x300");
-    if (artUrl && _pipImg.src !== artUrl) {
-      _pipImg.src = artUrl;
-      await new Promise(r => { _pipImg.onload = r; _pipImg.onerror = r; });
-    }
-
-    drawPip(track); // gambar frame awal sebelum PiP terbuka
-
-    try {
-      await _pipVideo.play();
-      await _pipVideo.requestPictureInPicture();
-      _pipActive = true;
-      startPipDraw(track);
-    } catch(e) {
-      console.warn("[DI-PiP]", e);
-      toast("Gagal membuka PiP — coba tap sekali di halaman dulu");
-    }
-
-    _pipVideo.addEventListener("leavepictureinpicture", () => {
-      _pipActive = false;
-      cancelAnimationFrame(_pipRaf);
-      _pipRaf = 0;
-    }, { once: false });
-  }
-
-  /* ── 3. TOMBOL DI DYNAMIC ISLAND ─────────────────────────
-     Tambahkan tombol kecil "🔔" dan "⧉" di collapsed pill
-     tanpa sentuh logic lain
-  ──────────────────────────────────────────────────────────── */
-  function injectDiBtns() { /* Dynamic Island removed */ }
-
-  /* ── 4. HOOK KE spUpdateMediaSession ──────────────────────
-     Wrap fungsi yang sudah ada — tidak ubah logic di dalamnya
-  ──────────────────────────────────────────────────────────── */
-  const _origUpdate = window.spUpdateMediaSession || function() {};
-  window.spUpdateMediaSession = function(track) {
-    _origUpdate(track);              // jalankan logic asli dulu
-    if (!track) return;
-    window._diLastTrack = track;
-
-    // Update artwork PiP
-    const artUrl = (track.artwork_url || "").replace("-large", "-t300x300");
-    if (_pipImg && artUrl && _pipImg.src !== artUrl) {
-      _pipImg.src = artUrl;
-    }
-
-    // Kirim/update notifikasi kalau izin sudah diberikan
-    if (typeof Notification !== "undefined" && Notification.permission === "granted") {
-      sendMediaNotif(track);
-    }
-  };
-
-  /* ── 5. INIT ──────────────────────────────────────────────*/
-  ensureSW();
-  console.log("[MediaNotif] Notification + PiP layer initialized (Dynamic Island removed)");
-})();
+/* Media notif / DI-Real layer removed */
 
 /* ============================================================
    BOTTOM NAV MINIMIZE ON SCROLL
@@ -4384,29 +4077,49 @@ function ensureAudioGraph() {
     audioCtx = audioCtx || new AC();
     if (audioCtx.state === "suspended") audioCtx.resume().catch(() => {});
     mediaSource = mediaSource || audioCtx.createMediaElementSource(audio);
+
     bassFilter = audioCtx.createBiquadFilter();
     bassFilter.type = "lowshelf";
-    bassFilter.frequency.value = 200;
+    bassFilter.frequency.value = 180;
+    bassFilter.gain.value = 0;
+
     trebleFilter = audioCtx.createBiquadFilter();
     trebleFilter.type = "highshelf";
-    trebleFilter.frequency.value = 3200;
+    trebleFilter.frequency.value = 4500;
+    trebleFilter.gain.value = 0;
+
     lofiFilter = audioCtx.createBiquadFilter();
     lofiFilter.type = "lowpass";
-    lofiFilter.frequency.value = 18000;
+    lofiFilter.frequency.value = 20000;
+    lofiFilter.Q.value = 0.7;
+
     panner = audioCtx.createStereoPanner();
     dryGain = audioCtx.createGain();
     wetGain = audioCtx.createGain();
     fxGain = audioCtx.createGain();
-    // simple impulse for reverb
+
+    // Reverb impulse lebih pendek & bersih (kurang noise)
     convolver = audioCtx.createConvolver();
     const rate = audioCtx.sampleRate;
-    const len = rate * 2;
+    const len = Math.floor(rate * 1.4);
     const buf = audioCtx.createBuffer(2, len, rate);
     for (let c = 0; c < 2; c++) {
       const d = buf.getChannelData(c);
-      for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.5);
+      for (let i = 0; i < len; i++) {
+        const t = i / len;
+        d[i] = (Math.random() * 2 - 1) * Math.pow(1 - t, 3.2) * 0.55;
+      }
     }
     convolver.buffer = buf;
+
+    // Compressor biar volume stabil + bisa lebih keras tanpa clipping parah
+    const comp = audioCtx.createDynamicsCompressor();
+    comp.threshold.value = -18;
+    comp.knee.value = 12;
+    comp.ratio.value = 3.5;
+    comp.attack.value = 0.003;
+    comp.release.value = 0.18;
+    window._fxComp = comp;
 
     mediaSource.connect(bassFilter);
     bassFilter.connect(trebleFilter);
@@ -4417,9 +4130,12 @@ function ensureAudioGraph() {
     convolver.connect(wetGain);
     dryGain.connect(fxGain);
     wetGain.connect(fxGain);
-    fxGain.connect(audioCtx.destination);
+    fxGain.connect(comp);
+    comp.connect(audioCtx.destination);
+
     dryGain.gain.value = 1;
     wetGain.gain.value = 0;
+    fxGain.gain.value = 1.35; // boost volume (sebelumnya sering terasa kecil)
     fxConnected = true;
     applySoundStyle(soundStyleId, true);
   } catch (e) {
@@ -4464,8 +4180,8 @@ function applySoundStyle(id, silent) {
   // playbackRate: only set when changed — reassigning same rate can glitch with MediaElementSource
   const curRate = audio.playbackRate || 1;
   const rateChanged = Math.abs(curRate - style.rate) > 0.01;
+  const MASTER = 1.35; // volume master — lebih keras, tetap aman lewat compressor
   if (rateChanged) {
-    // Soft ramp via master gain so rate change tidak patah
     const doRate = () => {
       try { audio.playbackRate = style.rate; } catch {}
       try { audio.preservesPitch = style.rate === 1; } catch {}
@@ -4476,8 +4192,8 @@ function applySoundStyle(id, silent) {
       const now = audioCtx.currentTime;
       try {
         fxGain.gain.cancelScheduledValues(now);
-        fxGain.gain.setValueAtTime(Math.max(fxGain.gain.value, 0.001), now);
-        fxGain.gain.linearRampToValueAtTime(0.001, now + 0.035);
+        fxGain.gain.setValueAtTime(Math.max(fxGain.gain.value, 0.05), now);
+        fxGain.gain.linearRampToValueAtTime(0.05, now + 0.03);
       } catch {}
       setTimeout(() => {
         doRate();
@@ -4485,28 +4201,37 @@ function applySoundStyle(id, silent) {
           const t = audioCtx.currentTime;
           try {
             fxGain.gain.cancelScheduledValues(t);
-            fxGain.gain.setValueAtTime(0.001, t);
-            fxGain.gain.linearRampToValueAtTime(1, t + 0.07);
+            fxGain.gain.setValueAtTime(0.05, t);
+            fxGain.gain.linearRampToValueAtTime(MASTER, t + 0.08);
           } catch {}
         }
-      }, 40);
+      }, 35);
     } else {
       doRate();
+      if (fxGain && audioCtx) {
+        try { fxGain.gain.setTargetAtTime(MASTER, audioCtx.currentTime, 0.05); } catch {}
+      }
     }
   } else {
     try { audio.preservesPitch = style.rate === 1; } catch {}
     try { audio.mozPreservesPitch = style.rate === 1; } catch {}
     try { audio.webkitPreservesPitch = style.rate === 1; } catch {}
+    if (fxGain && audioCtx) {
+      try { fxGain.gain.setTargetAtTime(MASTER, audioCtx.currentTime, 0.05); } catch {}
+    }
   }
 
   if (fxConnected && audioCtx) {
     const now = audioCtx.currentTime;
-    // Slightly longer time constants = smoother, less zipper noise
     bassFilter.gain.setTargetAtTime(style.bass, now, 0.08);
     trebleFilter.gain.setTargetAtTime(style.treble, now, 0.08);
-    lofiFilter.frequency.setTargetAtTime(style.lofi ? 2800 : 18000, now, 0.12);
-    dryGain.gain.setTargetAtTime(1 - style.reverb * 0.65, now, 0.12);
-    wetGain.gain.setTargetAtTime(style.reverb, now, 0.12);
+    // Normal = full bandwidth; lo-fi saja yang dipotong
+    lofiFilter.frequency.setTargetAtTime(style.lofi ? 3200 : 20000, now, 0.12);
+    // Dry/wet: jaga loudness (jangan terlalu turun saat reverb)
+    const dry = Math.max(0.45, 1 - style.reverb * 0.5);
+    const wet = style.reverb * 0.85;
+    dryGain.gain.setTargetAtTime(dry, now, 0.12);
+    wetGain.gain.setTargetAtTime(wet, now, 0.12);
     if (style.pan8d) startPan8d(); else stopPan8d();
   }
 

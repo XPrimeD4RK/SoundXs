@@ -1,6 +1,6 @@
 // SoundXs Service Worker — App-grade PWA
-// v20: push notification, background sync, shortcut handler, offline full
-const CACHE     = "soundxs-v20";
+// v22: push notification, background sync, shortcut handler, offline full
+const CACHE     = "soundxs-v22";
 const AUDIO_CACHE = "soundxs-audio-v1";
 const LOCAL     = ["/", "/index.html", "/soundxs-api-client.js", "/audio.js",
                    "/manifest.json", "/favicon.ico", "/favicon-32x32.png",
