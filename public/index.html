@@ -415,50 +415,116 @@
 
 
   /* Dynamic Island */
+  /* ===== DYNAMIC ISLAND — iOS & Android Enhanced ===== */
   #dynamicIsland {
     position: fixed;
-    top: max(env(safe-area-inset-top), 10px);
+    top: max(env(safe-area-inset-top, 10px), 10px);
     left: 50%;
     transform: translateX(-50%);
-    z-index: 90;
-    max-width: calc(100vw - 32px);
+    z-index: 9999;
     pointer-events: none;
+    /* Platform detection via JS will add .di-ios or .di-android class */
   }
+  /* iOS: notch area — pill sits inside the notch */
+  #dynamicIsland.di-ios {
+    top: max(env(safe-area-inset-top, 12px), 8px);
+  }
+  /* Android: float below status bar */
+  #dynamicIsland.di-android {
+    top: max(env(safe-area-inset-top, 0px), 12px);
+  }
+
+  /* ---- Collapsed pill ---- */
   #dynamicIsland .di-pill {
     pointer-events: auto;
     display: flex;
     align-items: center;
     gap: 10px;
-    min-height: 36px;
-    padding: 6px 14px 6px 6px;
+    min-height: 37px;
+    padding: 5px 14px 5px 5px;
     border-radius: 9999px;
     background: #0a0a0a;
-    border: 1px solid rgba(255,255,255,.08);
-    box-shadow: 0 8px 28px rgba(0,0,0,.45);
+    border: 1px solid rgba(255,255,255,.10);
+    box-shadow: 0 6px 24px rgba(0,0,0,.55), 0 2px 6px rgba(0,0,0,.3);
     color: #fff;
     cursor: pointer;
-    transition: min-width .35s cubic-bezier(.22,.9,.3,1), padding .3s ease, transform .25s cubic-bezier(.34,1.56,.64,1), opacity .25s ease;
+    transition:
+      max-width .38s cubic-bezier(.22,.9,.3,1),
+      border-radius .38s cubic-bezier(.22,.9,.3,1),
+      padding .3s ease,
+      transform .28s cubic-bezier(.34,1.56,.64,1),
+      opacity .25s ease,
+      min-height .38s cubic-bezier(.22,.9,.3,1);
     opacity: 0;
-    transform: scale(.92);
+    transform: scale(.88) translateY(-4px);
     max-width: 0;
+    min-height: 0;
     overflow: hidden;
     white-space: nowrap;
+    will-change: transform, max-width, opacity;
   }
   #dynamicIsland.show .di-pill {
     opacity: 1;
-    transform: scale(1);
-    max-width: 280px;
-    padding: 6px 14px 6px 6px;
+    transform: scale(1) translateY(0);
+    max-width: 300px;
+    min-height: 37px;
   }
+
+  /* ---- Expanded state ---- */
+  #dynamicIsland.di-expanded .di-pill {
+    max-width: min(340px, calc(100vw - 32px));
+    min-height: 88px;
+    border-radius: 26px;
+    padding: 12px 14px;
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
+    white-space: normal;
+    overflow: visible;
+  }
+  /* Row 1: art + meta + close */
+  #dynamicIsland .di-row1 {
+    display: flex; align-items: center; gap: 10px; width: 100%;
+  }
+  /* Row 2: progress (hidden when collapsed) */
+  #dynamicIsland .di-row2 {
+    display: none; width: 100%; gap: 6px; align-items: center;
+  }
+  #dynamicIsland.di-expanded .di-row2 { display: flex; }
+  /* Row 3: controls (hidden when collapsed) */
+  #dynamicIsland .di-row3 {
+    display: none; width: 100%; justify-content: space-between; align-items: center;
+  }
+  #dynamicIsland.di-expanded .di-row3 { display: flex; }
+
+  /* Art */
   #dynamicIsland .di-art {
     width: 28px; height: 28px; border-radius: 9999px; object-fit: cover; flex-shrink: 0;
+    transition: width .32s ease, height .32s ease, border-radius .32s ease;
   }
-  #dynamicIsland .di-meta { min-width: 0; line-height: 1.15; }
-  #dynamicIsland .di-title { font-size: 12px; font-weight: 700; max-width: 140px; overflow: hidden; text-overflow: ellipsis; }
-  #dynamicIsland .di-sub { font-size: 10px; color: rgba(255,255,255,.5); max-width: 140px; overflow: hidden; text-overflow: ellipsis; }
+  #dynamicIsland.di-expanded .di-art {
+    width: 44px; height: 44px; border-radius: 10px;
+  }
+
+  /* Meta */
+  #dynamicIsland .di-meta { min-width: 0; line-height: 1.2; flex: 1; }
+  #dynamicIsland .di-title {
+    font-size: 12px; font-weight: 700;
+    max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    transition: font-size .2s ease;
+  }
+  #dynamicIsland.di-expanded .di-title { font-size: 13px; max-width: 200px; }
+  #dynamicIsland .di-sub {
+    font-size: 10px; color: rgba(255,255,255,.5);
+    max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  #dynamicIsland.di-expanded .di-sub { max-width: 200px; }
+
+  /* EQ bars */
   #dynamicIsland .di-eq {
-    display: flex; align-items: flex-end; gap: 2px; height: 14px; margin-left: 4px;
+    display: flex; align-items: flex-end; gap: 2px; height: 14px; margin-left: 2px; flex-shrink: 0;
   }
+  #dynamicIsland.di-expanded .di-eq { display: none; }
   #dynamicIsland .di-eq span {
     width: 3px; border-radius: 2px; background: var(--a1, #1ed760);
     animation: diEq 0.9s ease-in-out infinite;
@@ -471,6 +537,41 @@
     0%,100% { transform: scaleY(.45); }
     50% { transform: scaleY(1); }
   }
+
+  /* Close (×) button — only in expanded */
+  #dynamicIsland .di-close {
+    display: none; background: none; border: none; color: rgba(255,255,255,.45);
+    font-size: 18px; line-height: 1; cursor: pointer; padding: 0 0 0 4px; flex-shrink: 0;
+  }
+  #dynamicIsland.di-expanded .di-close { display: block; }
+
+  /* Progress bar */
+  #dynamicIsland .di-progress-wrap {
+    flex: 1; height: 3px; background: rgba(255,255,255,.18); border-radius: 3px; overflow: hidden;
+  }
+  #dynamicIsland .di-progress-bar {
+    height: 100%; background: var(--a1, #1ed760); border-radius: 3px;
+    width: 0%; transition: width .5s linear;
+  }
+  #dynamicIsland .di-time {
+    font-size: 9px; color: rgba(255,255,255,.45); flex-shrink: 0; min-width: 30px; text-align: right;
+  }
+
+  /* Control buttons */
+  #dynamicIsland .di-ctrl-btn {
+    background: none; border: none; color: rgba(255,255,255,.85); cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    width: 32px; height: 32px; border-radius: 9999px;
+    transition: background .15s ease, transform .15s ease;
+    padding: 0;
+  }
+  #dynamicIsland .di-ctrl-btn:active { transform: scale(.85); background: rgba(255,255,255,.12); }
+  #dynamicIsland .di-ctrl-btn svg { width: 18px; height: 18px; }
+  #dynamicIsland .di-ctrl-btn.di-playpause svg { width: 22px; height: 22px; }
+  #dynamicIsland .di-ctrl-btn.di-open-btn { font-size: 10px; color: var(--a1,#1ed760); font-weight: 700; width: auto; padding: 0 8px; height: 24px; background: rgba(255,255,255,.08); border-radius: 9999px; }
+
+  /* Tap ripple feedback */
+  #dynamicIsland .di-pill:active { transform: scale(.97); }
 
   /* Sound style modal rows */
   .sound-style-row {
@@ -1014,16 +1115,45 @@ window.addEventListener("load", async () => {
 </script>
 
 <div id="app">
-  <!-- Dynamic Island -->
-  <div id="dynamicIsland" class="" aria-live="polite">
-    <button type="button" class="di-pill tap" onclick="openFullPlayer()" aria-label="Now playing">
-      <img id="diArt" class="di-art" src="" alt="">
-      <div class="di-meta">
-        <div id="diTitle" class="di-title">—</div>
-        <div id="diSub" class="di-sub">—</div>
+  <!-- Dynamic Island — Enhanced iOS & Android -->
+  <div id="dynamicIsland" class="" aria-live="polite" aria-label="Now playing">
+    <div class="di-pill" role="region" tabindex="0">
+      <!-- Row 1: always visible -->
+      <div class="di-row1">
+        <img id="diArt" class="di-art" src="" alt="Album art">
+        <div class="di-meta">
+          <div id="diTitle" class="di-title">—</div>
+          <div id="diSub" class="di-sub">—</div>
+        </div>
+        <div class="di-eq" aria-hidden="true"><span></span><span></span><span></span></div>
+        <button class="di-close" id="diClose" aria-label="Tutup">×</button>
       </div>
-      <div class="di-eq" aria-hidden="true"><span></span><span></span><span></span></div>
-    </button>
+      <!-- Row 2: progress (expanded only) -->
+      <div class="di-row2" aria-hidden="true">
+        <div class="di-progress-wrap">
+          <div class="di-progress-bar" id="diProgressBar"></div>
+        </div>
+        <span class="di-time" id="diTime">0:00</span>
+      </div>
+      <!-- Row 3: controls (expanded only) -->
+      <div class="di-row3" aria-hidden="true">
+        <!-- Prev -->
+        <button class="di-ctrl-btn di-prev" id="diPrev" aria-label="Sebelumnya">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6 8.5 6V6z"/></svg>
+        </button>
+        <!-- Play/Pause -->
+        <button class="di-ctrl-btn di-playpause" id="diPlayPause" aria-label="Play/Pause">
+          <svg id="diPlayIcon" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+          <svg id="diPauseIcon" viewBox="0 0 24 24" fill="currentColor" style="display:none"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+        </button>
+        <!-- Next -->
+        <button class="di-ctrl-btn di-next" id="diNext" aria-label="Berikutnya">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 18l8.5-6L6 6v12zm2-8.14 5.5 3.86L8 15.14V9.86zM16 6h2v12h-2z"/></svg>
+        </button>
+        <!-- Open full player -->
+        <button class="di-ctrl-btn di-open-btn" id="diOpenFull" aria-label="Buka player">Buka</button>
+      </div>
+    </div>
   </div>
 
 
@@ -1089,7 +1219,7 @@ window.addEventListener("load", async () => {
           Refresh <i data-lucide="refresh-cw" class="w-[11px] h-[11px]"></i>
         </button>
       </div>
-      <div id="quickPicksGrid" class="space-y-2 max-h-[340px] overflow-y-auto overscroll-contain no-scrollbar">
+      <div id="quickPicksGrid" class="space-y-2">
         <div class="text-white/35 text-[12px] py-8 text-center">Memuat lagu...</div>
       </div>
     </section>
@@ -3884,36 +4014,200 @@ function closeSoundStyle() {
   document.body.style.overflow = "";
 }
 
-function updateDynamicIsland() {
+/* ============================================================
+   DYNAMIC ISLAND — Enhanced (iOS + Android)
+============================================================ */
+(function() {
   const di = document.getElementById("dynamicIsland");
   if (!di) return;
-  const t = state.currentTrack;
-  if (!t) {
-    di.classList.remove("show", "paused");
-    return;
+
+  // --- Platform detection ---
+  const ua = navigator.userAgent || "";
+  const isIOS = /iPhone|iPad|iPod/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  const isAndroid = /Android/.test(ua);
+  if (isIOS) di.classList.add("di-ios");
+  else if (isAndroid) di.classList.add("di-android");
+
+  let _expanded = false;
+  let _progressRaf = null;
+
+  // --- Elements ---
+  const pill      = di.querySelector(".di-pill");
+  const diArt     = document.getElementById("diArt");
+  const diTitle   = document.getElementById("diTitle");
+  const diSub     = document.getElementById("diSub");
+  const diBar     = document.getElementById("diProgressBar");
+  const diTime    = document.getElementById("diTime");
+  const diPlay    = document.getElementById("diPlayPause");
+  const diPlayIc  = document.getElementById("diPlayIcon");
+  const diPauseIc = document.getElementById("diPauseIcon");
+  const diPrev    = document.getElementById("diPrev");
+  const diNext    = document.getElementById("diNext");
+  const diClose   = document.getElementById("diClose");
+  const diOpen    = document.getElementById("diOpenFull");
+
+  function fmtTime(s) {
+    if (!isFinite(s) || s < 0) return "0:00";
+    const m = Math.floor(s / 60), sec = Math.floor(s % 60);
+    return m + ":" + (sec < 10 ? "0" : "") + sec;
   }
-  const art = t.artwork_url || (t.user && t.user.avatar_url) || "";
-  const img = document.getElementById("diArt");
-  const title = document.getElementById("diTitle");
-  const sub = document.getElementById("diSub");
-  if (img && art) img.src = art;
-  if (title) title.textContent = t.title || "—";
-  if (sub) {
-    const style = SOUND_STYLES.find(s => s.id === soundStyleId);
-    sub.textContent = ((t.user && t.user.username) || "Unknown") + (style && style.id !== "normal" ? " · " + style.name : "");
+
+  function tickProgress() {
+    if (!diBar || !diTime) return;
+    const dur = audio.duration, cur = audio.currentTime;
+    if (dur > 0) {
+      diBar.style.width = (cur / dur * 100).toFixed(2) + "%";
+      diTime.textContent = fmtTime(cur) + " / " + fmtTime(dur);
+    }
+    if (_expanded && !audio.paused) {
+      _progressRaf = requestAnimationFrame(tickProgress);
+    }
   }
-  di.classList.add("show");
-  di.classList.toggle("paused", !!audio.paused);
-}
+
+  function startProgress() {
+    cancelAnimationFrame(_progressRaf);
+    if (_expanded) _progressRaf = requestAnimationFrame(tickProgress);
+  }
+
+  function collapse() {
+    _expanded = false;
+    di.classList.remove("di-expanded");
+    cancelAnimationFrame(_progressRaf);
+    if (diBar) diBar.style.width = "0%";
+    if (diTime) diTime.textContent = "0:00";
+  }
+
+  function expand() {
+    _expanded = true;
+    di.classList.add("di-expanded");
+    tickProgress();
+    if (!audio.paused) startProgress();
+  }
+
+  function toggleExpand() {
+    if (_expanded) collapse();
+    else expand();
+  }
+
+  function updatePlayPauseIcon() {
+    if (!diPlayIc || !diPauseIc) return;
+    const paused = audio.paused;
+    diPlayIc.style.display  = paused ? "" : "none";
+    diPauseIc.style.display = paused ? "none" : "";
+  }
+
+  // --- Wire controls ---
+  if (pill) {
+    pill.addEventListener("click", function(e) {
+      // Ignore clicks on child buttons
+      if (e.target !== pill && e.target !== diTitle && e.target !== diSub && e.target !== diArt) return;
+      toggleExpand();
+    });
+  }
+  if (diClose) {
+    diClose.addEventListener("click", function(e) {
+      e.stopPropagation();
+      collapse();
+    });
+  }
+  if (diOpen) {
+    diOpen.addEventListener("click", function(e) {
+      e.stopPropagation();
+      collapse();
+      openFullPlayer();
+    });
+  }
+  if (diPlay) {
+    diPlay.addEventListener("click", function(e) {
+      e.stopPropagation();
+      if (audio.paused) audio.play().catch(() => {});
+      else audio.pause();
+    });
+  }
+  if (diPrev) {
+    diPrev.addEventListener("click", function(e) {
+      e.stopPropagation();
+      if (typeof playPrev === "function") playPrev();
+    });
+  }
+  if (diNext) {
+    diNext.addEventListener("click", function(e) {
+      e.stopPropagation();
+      if (typeof playNext === "function") playNext();
+    });
+  }
+
+  // Swipe up to expand, swipe down to collapse
+  let _touchY = 0;
+  if (pill) {
+    pill.addEventListener("touchstart", function(e) {
+      _touchY = e.touches[0].clientY;
+    }, { passive: true });
+    pill.addEventListener("touchend", function(e) {
+      const dy = _touchY - e.changedTouches[0].clientY;
+      if (dy > 20 && !_expanded) expand();       // swipe up → expand
+      else if (dy < -20 && _expanded) collapse(); // swipe down → collapse
+    }, { passive: true });
+  }
+
+  // Auto-collapse after 8s of inactivity when expanded
+  let _autoCollapseTimer = null;
+  function resetAutoCollapse() {
+    clearTimeout(_autoCollapseTimer);
+    if (_expanded) _autoCollapseTimer = setTimeout(collapse, 8000);
+  }
+  if (pill) pill.addEventListener("touchstart", resetAutoCollapse, { passive: true });
+  if (pill) pill.addEventListener("click", resetAutoCollapse, { passive: true });
+
+  // --- Audio events ---
+  audio.addEventListener("play", function() {
+    updatePlayPauseIcon();
+    if (_expanded) startProgress();
+    resetAutoCollapse();
+  });
+  audio.addEventListener("pause", function() {
+    updatePlayPauseIcon();
+    cancelAnimationFrame(_progressRaf);
+    tickProgress();
+  });
+  audio.addEventListener("timeupdate", function() {
+    if (_expanded && audio.paused) tickProgress();
+  });
+  audio.addEventListener("ended", function() {
+    updatePlayPauseIcon();
+    cancelAnimationFrame(_progressRaf);
+  });
+
+  // --- Main update (called by playTrack etc.) ---
+  window.updateDynamicIsland = function() {
+    const t = state && state.currentTrack;
+    if (!t) {
+      di.classList.remove("show", "paused");
+      collapse();
+      return;
+    }
+    const art = t.artwork_url || (t.user && t.user.avatar_url) || "";
+    if (diArt && art) diArt.src = art;
+    if (diTitle) diTitle.textContent = t.title || "—";
+    if (diSub) {
+      const style = (typeof SOUND_STYLES !== "undefined") && SOUND_STYLES.find(s => s.id === soundStyleId);
+      diSub.textContent = ((t.user && t.user.username) || "Unknown") + (style && style.id !== "normal" ? " · " + style.name : "");
+    }
+    di.classList.add("show");
+    di.classList.toggle("paused", !!audio.paused);
+    updatePlayPauseIcon();
+    if (_expanded) { tickProgress(); if (!audio.paused) startProgress(); }
+  };
+})();
 
 // hook play/pause for island + ensure graph on first play
 audio.addEventListener("play", () => {
   try { ensureAudioGraph(); if (audioCtx && audioCtx.state === "suspended") audioCtx.resume(); } catch {}
   applySoundStyle(soundStyleId, true);
-  updateDynamicIsland();
+  if (typeof updateDynamicIsland === "function") updateDynamicIsland();
 });
-audio.addEventListener("pause", () => updateDynamicIsland());
-audio.addEventListener("ended", () => updateDynamicIsland());
+audio.addEventListener("pause", () => { if (typeof updateDynamicIsland === "function") updateDynamicIsland(); });
+audio.addEventListener("ended", () => { if (typeof updateDynamicIsland === "function") updateDynamicIsland(); });
 
 
 
