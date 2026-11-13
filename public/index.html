@@ -421,6 +421,20 @@
   /* Bottom nav minimize on scroll */
 
 
+  /* Profile banner video */
+  .profile-banner {
+    background: #0a0a0c;
+  }
+  .profile-banner video {
+    display: block;
+    width: 100%;
+    height: 240px;
+    object-fit: cover;
+  }
+  @media (min-width: 420px) {
+    .profile-banner video { height: 280px; }
+  }
+
   /* Sound style modal rows */
   .sound-style-row {
     display: flex; align-items: flex-start; gap: 12px;
@@ -1308,27 +1322,18 @@ window.addEventListener("load", async () => {
     <div class="max-w-[440px] mx-auto px-4 pt-6 pb-10">
 
       <div class="text-center mb-7">
-        <div id="profileBanner" class="profile-banner relative w-full overflow-hidden rounded-[22px] border border-white/[0.10] shadow-[0_16px_40px_-12px_rgba(0,0,0,.75)]">
+        <div id="profileBanner" class="profile-banner relative w-full overflow-hidden rounded-[24px] border border-white/[0.10] shadow-[0_16px_40px_-12px_rgba(0,0,0,.75)]">
           <video
             id="profileBannerVideo"
-            class="block w-full h-[180px] object-cover bg-black"
+            class="block w-full object-cover bg-black"
             src="https://files.catbox.moe/7qkvgg.mp4"
             autoplay
             muted
             loop
             playsinline
-            preload="metadata"
+            webkit-playsinline
+            preload="auto"
           ></video>
-          <div class="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/70 via-black/15 to-transparent"></div>
-          <span class="absolute top-3 right-3 z-[1] inline-flex items-center gap-1.5 rounded-full bg-emerald-500/90 px-2.5 py-1 text-[10px] font-bold tracking-wider text-white shadow-sm">
-            <span class="w-[6px] h-[6px] rounded-full bg-white animate-pulse"></span>LIVE
-          </span>
-          <div class="absolute bottom-3 left-3 right-3 z-[1] text-left">
-            <div class="text-[18px] font-extrabold tracking-tight leading-none">
-              <span class="text-white">xs0ciety</span>
-              <span class="text-cyan-300 ml-1">ENGINE</span>
-            </div>
-          </div>
         </div>
         <h2 id="profileName" class="grad-text text-[34px] leading-tight font-extrabold mt-5 tracking-tight">SoundXs</h2>
         <p id="profileBio" class="text-[15px] text-white/50 mt-1 px-4">Streaming Musik dengan Lirik Sinkron</p>
@@ -2126,14 +2131,23 @@ if (document.readyState === "loading") {
 function updateProfileUI() {
   document.getElementById("profileName").textContent = "SoundXs";
   document.getElementById("profileBio").textContent = "Streaming musik gratis dengan lirik sinkron";
-  // Banner video (catbox) — pastikan play saat tab profil dibuka
+  // Banner video — autoplay muted saat tab profil dibuka
   const vid = document.getElementById("profileBannerVideo");
-  if (vid) {
+  if (!vid) return;
+  const tryPlay = () => {
     try {
       vid.muted = true;
+      vid.defaultMuted = true;
+      vid.setAttribute("muted", "");
+      vid.playsInline = true;
       const p = vid.play();
       if (p && typeof p.catch === "function") p.catch(() => {});
     } catch {}
+  };
+  tryPlay();
+  if (vid.readyState < 2) {
+    vid.addEventListener("loadeddata", tryPlay, { once: true });
+    vid.addEventListener("canplay", tryPlay, { once: true });
   }
 }
 function openSupport() {
