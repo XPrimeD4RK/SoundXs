@@ -1325,15 +1325,18 @@ window.addEventListener("load", async () => {
         <div id="profileBanner" class="profile-banner relative w-full overflow-hidden rounded-[24px] border border-white/[0.10] shadow-[0_16px_40px_-12px_rgba(0,0,0,.75)]">
           <video
             id="profileBannerVideo"
-            class="block w-full object-cover bg-black"
-            src="https://files.catbox.moe/7qkvgg.mp4"
+            class="block w-full object-cover bg-[#0a0a0c]"
+            poster="/profile-banner.jpg"
             autoplay
             muted
             loop
             playsinline
             webkit-playsinline
             preload="auto"
-          ></video>
+          >
+            <source src="/profile-banner.mp4" type="video/mp4">
+            <source src="https://files.catbox.moe/7qkvgg.mp4" type="video/mp4">
+          </video>
         </div>
         <h2 id="profileName" class="grad-text text-[34px] leading-tight font-extrabold mt-5 tracking-tight">SoundXs</h2>
         <p id="profileBio" class="text-[15px] text-white/50 mt-1 px-4">Streaming Musik dengan Lirik Sinkron</p>
@@ -2128,27 +2131,42 @@ if (document.readyState === "loading") {
 /* ============================================================
    PROFIL + SUPPORT
 ============================================================ */
+function playProfileBanner() {
+  const vid = document.getElementById("profileBannerVideo");
+  if (!vid) return;
+  try {
+    vid.muted = true;
+    vid.defaultMuted = true;
+    vid.setAttribute("muted", "");
+    vid.playsInline = true;
+    // Tab profil tadinya hidden → browser sering butuh play() manual setelah un-hide
+    const p = vid.play();
+    if (p && typeof p.catch === "function") {
+      p.catch(() => {
+        // fallback: paksa load ulang lalu play
+        try {
+          vid.load();
+          vid.muted = true;
+          vid.play().catch(() => {});
+        } catch {}
+      });
+    }
+  } catch {}
+}
 function updateProfileUI() {
   document.getElementById("profileName").textContent = "SoundXs";
   document.getElementById("profileBio").textContent = "Streaming musik gratis dengan lirik sinkron";
-  // Banner video — autoplay muted saat tab profil dibuka
   const vid = document.getElementById("profileBannerVideo");
   if (!vid) return;
-  const tryPlay = () => {
-    try {
-      vid.muted = true;
-      vid.defaultMuted = true;
-      vid.setAttribute("muted", "");
-      vid.playsInline = true;
-      const p = vid.play();
-      if (p && typeof p.catch === "function") p.catch(() => {});
-    } catch {}
-  };
-  tryPlay();
-  if (vid.readyState < 2) {
-    vid.addEventListener("loadeddata", tryPlay, { once: true });
-    vid.addEventListener("canplay", tryPlay, { once: true });
-  }
+  vid.addEventListener("loadeddata", playProfileBanner, { once: true });
+  vid.addEventListener("canplay", playProfileBanner, { once: true });
+  // Setelah tab profil terlihat, load + play (mirip xs0ciety yang video-nya di halaman utama)
+  requestAnimationFrame(() => {
+    try { if (vid.readyState < 2) vid.load(); } catch {}
+    playProfileBanner();
+  });
+  setTimeout(playProfileBanner, 150);
+  setTimeout(playProfileBanner, 500);
 }
 function openSupport() {
   const m = document.getElementById("supportModal");
