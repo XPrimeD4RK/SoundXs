@@ -2,7 +2,7 @@
 <html lang="id">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="google-site-verification" content="D1oUHv6dGj1dX7cihsmCFHur-ww9WxDmfzoywawpfPI" />
 <meta name="theme-color" content="#121212">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -36,7 +36,7 @@
 <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
 <link rel="manifest" href="/manifest.json">
 <script src="https://cdn.tailwindcss.com"></script>
-<script src="https://unpkg.com/lucide@latest"></script>
+<script src="https://unpkg.com/lucide@0.383.0"></script>
 <script>window.lucide = window.lucide || { createIcons: function(){} };</script>
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1"></script>
 <script src="/soundxs-api-client.js"></script>
@@ -837,6 +837,37 @@
   body { touch-action: pan-y pinch-zoom; }
   .view { overflow-x: clip; }
   body.ui-original *:not(.lg-pill) { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
+  /* Terjemahan lirik */
+  .lyric-tr { display:block; margin-top:4px; font-size:.58em; font-weight:500; line-height:1.35; color:rgba(255,255,255,.42); }
+  .lyric-line.active .lyric-tr { color:rgba(255,255,255,.7); }
+  .lyric-tr-status { font-size:11px; color:rgba(255,255,255,.45); padding-bottom:8px; text-align:center; }
+  .fl-line { font-size:17px; font-weight:600; color:rgba(255,255,255,.9); }
+  .fl-tr { font-size:14px; color:rgba(255,255,255,.5); margin:2px 0 14px; }
+  .fl-gap { font-size:12px; letter-spacing:.5em; color:rgba(255,255,255,.3); margin:10px 0; }
+  /* Menu now playing */
+  .np-sheet { background:#17181c; border:1px solid rgba(255,255,255,.08); border-radius:24px; padding:16px; }
+  .np-head { display:flex; align-items:center; gap:12px; padding:4px 4px 14px; border-bottom:1px solid rgba(255,255,255,.07); margin-bottom:10px; }
+  .np-art { width:48px; height:48px; border-radius:12px; object-fit:cover; flex-shrink:0; }
+  .np-title { font-size:15px; font-weight:700; }
+  .np-sub { font-size:12.5px; color:rgba(255,255,255,.5); margin-top:2px; }
+  .np-group { border-radius:18px; background:rgba(255,255,255,.035); padding:4px; margin-bottom:10px; }
+  .np-row { width:100%; display:flex; align-items:center; gap:12px; padding:11px 10px; border-radius:14px; text-align:left; color:#fff; text-decoration:none; background:none; border:0; font-size:14px; }
+  button.np-row:active, a.np-row:active { background:rgba(255,255,255,.06); }
+  .np-ic { width:34px; height:34px; border-radius:10px; background:rgba(255,255,255,.07); display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+  .np-txt { flex:1; min-width:0; display:flex; flex-direction:column; }
+  .np-txt b { font-weight:600; font-size:14px; }
+  .np-txt small { font-size:12px; color:rgba(255,255,255,.45); margin-top:2px; }
+  .np-switch { position:relative; width:44px; height:26px; border-radius:999px; background:rgba(255,255,255,.16); border:0; flex-shrink:0; transition:background .2s; }
+  .np-switch span { position:absolute; top:3px; left:3px; width:20px; height:20px; border-radius:50%; background:#fff; transition:transform .2s; }
+  .np-switch[aria-checked="true"] { background:var(--a1); }
+  .np-switch[aria-checked="true"] span { transform:translateX(18px); }
+  .np-langs { display:flex; flex-wrap:wrap; gap:6px; padding:4px 10px 10px; }
+  .np-lang { padding:6px 12px; border-radius:999px; font-size:12px; font-weight:600; background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.08); color:rgba(255,255,255,.75); }
+  .np-lang.on { background:var(--a1); color:#071109; border-color:transparent; }
+  /* Fallback kalau CDN Tailwind gagal dimuat: class dasar tetap bekerja */
+  .hidden { display:none !important; }
+  /* Fokus keyboard */
+  :focus-visible { outline:2px solid var(--a2); outline-offset:2px; }
 </style>
 
 <!-- JSON-LD Structured Data -->
@@ -959,7 +990,7 @@ window.addEventListener("appinstalled", () => {
   window.__bip = null;
   hideInstallBanner();
   try { localStorage.setItem("pwa_installed", "1"); } catch {}
-  if (typeof toast === "function") toast("SoundXs berhasil diinstall! 🎉");
+  if (typeof toast === "function") toast("SoundXs berhasil diinstall");
 });
 
 // ── Install Banner UI ──────────────────────────────────────
@@ -1335,31 +1366,23 @@ window.addEventListener("load", async () => {
       </button>
     </div>
 
-    <!-- Quick access grid (mirip screenshot) -->
+    <!-- Akses cepat -->
     <div class="grid grid-cols-2 gap-[10px] mb-6">
       <button onclick="switchView('liked')" class="lib-card tap rounded-2xl bg-[#1c1c1e] border border-white/[0.06] p-4 flex flex-col items-start gap-3 text-left min-h-[110px]">
-        <div class="w-[42px] h-[42px] rounded-xl bg-white/[0.08] flex items-center justify-center">
-          <i data-lucide="heart" class="w-[22px] h-[22px] text-white/80"></i>
-        </div>
-        <span class="text-[14px] font-semibold">Disukai</span>
+        <span class="w-[42px] h-[42px] rounded-xl bg-white/[0.08] flex items-center justify-center"><i data-lucide="heart" class="w-[22px] h-[22px] text-white/80"></i></span>
+        <span class="min-w-0"><span class="block text-[14px] font-semibold">Disukai</span><span id="libLikedCount" class="block text-[11px] text-white/45 mt-0.5">0 lagu</span></span>
       </button>
       <button onclick="switchView('offline')" class="lib-card tap rounded-2xl bg-[#1c1c1e] border border-white/[0.06] p-4 flex flex-col items-start gap-3 text-left min-h-[110px]">
-        <div class="w-[42px] h-[42px] rounded-xl bg-white/[0.08] flex items-center justify-center">
-          <i data-lucide="download" class="w-[22px] h-[22px] text-white/80"></i>
-        </div>
-        <span class="text-[14px] font-semibold">Diunduh</span>
+        <span class="w-[42px] h-[42px] rounded-xl bg-white/[0.08] flex items-center justify-center"><i data-lucide="download" class="w-[22px] h-[22px] text-white/80"></i></span>
+        <span class="min-w-0"><span class="block text-[14px] font-semibold">Diunduh</span><span id="libOfflineCount" class="block text-[11px] text-white/45 mt-0.5">0 lagu</span></span>
       </button>
-      <button onclick="switchView('liked')" class="lib-card tap rounded-2xl bg-[#1c1c1e] border border-white/[0.06] p-4 flex flex-col items-start gap-3 text-left min-h-[110px]">
-        <div class="w-[42px] h-[42px] rounded-xl bg-white/[0.08] flex items-center justify-center">
-          <i data-lucide="trending-up" class="w-[22px] h-[22px] text-white/80"></i>
-        </div>
-        <span class="text-[14px] font-semibold">Teratas Saya</span>
+      <button onclick="openLibraryArtists()" class="lib-card tap rounded-2xl bg-[#1c1c1e] border border-white/[0.06] p-4 flex flex-col items-start gap-3 text-left min-h-[110px]">
+        <span class="w-[42px] h-[42px] rounded-xl bg-white/[0.08] flex items-center justify-center"><i data-lucide="users" class="w-[22px] h-[22px] text-white/80"></i></span>
+        <span class="min-w-0"><span class="block text-[14px] font-semibold">Artis</span><span id="libArtistCount" class="block text-[11px] text-white/45 mt-0.5">0 artis</span></span>
       </button>
-      <button onclick="switchView('offline')" class="lib-card tap rounded-2xl bg-[#1c1c1e] border border-white/[0.06] p-4 flex flex-col items-start gap-3 text-left min-h-[110px]">
-        <div class="w-[42px] h-[42px] rounded-xl bg-white/[0.08] flex items-center justify-center">
-          <i data-lucide="hard-drive" class="w-[22px] h-[22px] text-white/80"></i>
-        </div>
-        <span class="text-[14px] font-semibold">Tersimpan di Cache</span>
+      <button onclick="switchView('home')" class="lib-card tap rounded-2xl bg-[#1c1c1e] border border-white/[0.06] p-4 flex flex-col items-start gap-3 text-left min-h-[110px]">
+        <span class="w-[42px] h-[42px] rounded-xl bg-white/[0.08] flex items-center justify-center"><i data-lucide="history" class="w-[22px] h-[22px] text-white/80"></i></span>
+        <span class="min-w-0"><span class="block text-[14px] font-semibold">Terakhir Diputar</span><span id="libRecentCount" class="block text-[11px] text-white/45 mt-0.5 truncate">Belum ada</span></span>
       </button>
     </div>
 
@@ -1403,7 +1426,6 @@ window.addEventListener("load", async () => {
           <video
             id="profileBannerVideo"
             class="block w-full object-cover bg-[#0a0a0c]"
-            poster="/profile-banner.jpg"
             autoplay
             muted
             loop
@@ -1412,10 +1434,9 @@ window.addEventListener("load", async () => {
             preload="auto"
           >
             <source src="/profile-banner.mp4" type="video/mp4">
-            <source src="https://files.catbox.moe/7qkvgg.mp4" type="video/mp4">
           </video>
         </div>
-        <h2 id="profileName" class="grad-text text-[34px] leading-tight font-extrabold mt-5 tracking-tight">SoundXs</h2>
+        <h2 id="profileName" class="text-[34px] leading-tight font-extrabold mt-5 tracking-tight">SoundXs</h2>
         <p id="profileBio" class="text-[15px] text-white/50 mt-1 px-4">Streaming Musik dengan Lirik Sinkron</p>
       </div>
 
@@ -1472,11 +1493,11 @@ window.addEventListener("load", async () => {
         <div class="flex items-center gap-2 mb-2 text-[13px] font-bold tracking-wider uppercase text-white/60">
           <i data-lucide="heart" class="w-[15px] h-[15px] text-rose-400 fill-current"></i> Lagu yang disukai
         </div>
-        <div class="fav-box mb-4">Semua lagu Hindia</div>
+        <div id="profileLikesBox" class="fav-box mb-4">—</div>
         <div class="flex items-center gap-2 mb-2 text-[13px] font-bold tracking-wider uppercase text-white/60">
           <i data-lucide="disc" class="w-[15px] h-[15px] text-purple-400"></i> Playlist yang disukai
         </div>
-        <div class="fav-box">Menari dengan Bayangan &amp; Hindia</div>
+        <div id="profilePlaylistsBox" class="fav-box">—</div>
       </div>
 
       <button onclick="openSupport()" class="wide-btn tap"><i data-lucide="life-buoy" class="w-[20px] h-[20px]"></i> Bantuan &amp; Support</button>
@@ -1608,6 +1629,7 @@ window.addEventListener("load", async () => {
           <div class="flex items-center gap-2 shrink-0">
             <button onclick="downloadCurrent()" class="act-btn tap" id="fullDownloadBtn"><i data-lucide="download" id="fullDownloadIcon" class="w-[22px] h-[22px] text-white/75"></i></button>
             <button onclick="toggleLikeCurrent()" class="act-btn tap"><i data-lucide="heart" id="fullHeartIcon" class="w-[22px] h-[22px] text-white/75"></i></button>
+            <button onclick="openNpMenu()" class="act-btn tap" aria-label="Menu lainnya"><i data-lucide="ellipsis" class="w-[22px] h-[22px] text-white/75"></i></button>
           </div>
         </div>
 
@@ -1654,6 +1676,36 @@ window.addEventListener("load", async () => {
           </div>
         </div>
         <div id="fullLyricContent" class="text-[16px] leading-[2] text-white/85 whitespace-pre-wrap"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MENU NOW PLAYING (⋯) -->
+  <div id="npMenu" class="modal-overlay hidden" style="z-index:560" onclick="if(event.target===this)closeNpMenu()">
+    <div class="h-full flex items-end justify-center p-3">
+      <div class="np-sheet modal-card w-full max-w-[440px]">
+        <div class="np-head">
+          <img id="npMenuArt" src="" alt="" class="np-art">
+          <div class="min-w-0 flex-1">
+            <p id="npMenuTitle" class="np-title truncate">—</p>
+            <p id="npMenuArtist" class="np-sub truncate">—</p>
+          </div>
+          <button onclick="closeNpMenu()" class="w-[34px] h-[34px] rounded-full flex items-center justify-center text-white/55 tap" aria-label="Tutup"><i data-lucide="x" class="w-[18px] h-[18px]"></i></button>
+        </div>
+        <div class="np-group">
+          <div class="np-row">
+            <span class="np-ic"><i data-lucide="languages" class="w-[17px] h-[17px]"></i></span>
+            <span class="np-txt"><b>Terjemahkan lirik</b><small id="npTrState">Tampilkan terjemahan di bawah tiap baris</small></span>
+            <button id="npTrSwitch" role="switch" aria-checked="false" aria-label="Terjemahkan lirik" onclick="setTrOn(!state.lyricTrOn)" class="np-switch"><span></span></button>
+          </div>
+          <div id="npTrLangs" class="np-langs"></div>
+        </div>
+        <div class="np-group">
+          <button class="np-row tap" onclick="npAddToPlaylist()"><span class="np-ic"><i data-lucide="list-plus" class="w-[17px] h-[17px]"></i></span><span class="np-txt"><b>Tambah ke playlist</b></span></button>
+          <button class="np-row tap" onclick="npDownload()"><span class="np-ic"><i data-lucide="download" class="w-[17px] h-[17px]"></i></span><span class="np-txt"><b>Unduh untuk offline</b></span></button>
+          <button class="np-row tap" onclick="npCopyLink()"><span class="np-ic"><i data-lucide="link" class="w-[17px] h-[17px]"></i></span><span class="np-txt"><b>Salin tautan lagu</b></span></button>
+          <a id="npOpenSource" href="https://soundcloud.com" target="_blank" rel="noopener noreferrer" class="np-row tap"><span class="np-ic"><i data-lucide="external-link" class="w-[17px] h-[17px]"></i></span><span class="np-txt"><b>Buka di SoundCloud</b></span></a>
+        </div>
       </div>
     </div>
   </div>
@@ -1729,7 +1781,7 @@ window.addEventListener("load", async () => {
             <i data-lucide="x" class="w-[18px] h-[18px]"></i>
           </button>
         </div>
-        <p class="text-[12.5px] text-white/55 mb-4 relative">Scan QRIS di bawah buat traktir developer. Makasih banyak ☕</p>
+        <p class="text-[12.5px] text-white/55 mb-4 relative">Scan QRIS di bawah buat traktir developer. Makasih banyak.</p>
         <div class="qris-frame relative mx-auto max-w-[280px] bg-white p-2 rounded-[18px]">
           <img src="/qris-donate.jpg" alt="QRIS Donasi xs0ciety HUB" class="w-full h-auto rounded-[12px] block" loading="lazy">
         </div>
@@ -1838,6 +1890,10 @@ const state = {
   lyricSynced: false,
   lyricLoadingFor: null,
   currentLyricLine: -1,
+  lyricTr: null,
+  lyricTrLoading: false,
+  lyricTrOn: (() => { try { return localStorage.getItem("sp_tr_on") === "1"; } catch { return false; } })(),
+  lyricTrLang: (() => { try { return localStorage.getItem("sp_tr_lang") || "id"; } catch { return "id"; } })(),
   replyTo: null,
   attach: null,
   editingMessageId: null,
@@ -2185,15 +2241,7 @@ function switchView(name, opts) {
     doShow();
     return;
   }
-  if (_tabAnimating) {
-    // Finish previous instantly then run new transition on next frame
-    doShow();
-    requestAnimationFrame(() => {
-      // re-enter with animate from current (already name)
-      // state.view already name; need prev for direction — skip double anim
-    });
-    return;
-  }
+  if (_tabAnimating) { doShow(); return; }
 
   _tabAnimating = true;
   const fromEl = document.getElementById("view-" + prev);
@@ -2302,10 +2350,29 @@ function playProfileBanner() {
 function updateProfileUI() {
   document.getElementById("profileName").textContent = "SoundXs";
   document.getElementById("profileBio").textContent = "Streaming musik gratis dengan lirik sinkron";
+  const likesBox = document.getElementById("profileLikesBox");
+  if (likesBox) {
+    const counts = {};
+    state.likes.forEach(t => { const u = t.user && t.user.username; if (u) counts[u] = (counts[u] || 0) + 1; });
+    const top = Object.entries(counts).sort((x, y) => y[1] - x[1])[0];
+    likesBox.textContent = state.likes.length
+      ? `${state.likes.length} lagu${top ? " · paling sering: " + top[0] : ""}`
+      : "Belum ada lagu disukai";
+  }
+  const plBox = document.getElementById("profilePlaylistsBox");
+  if (plBox) {
+    const names = state.playlists.slice(0, 3).map(p => p.name).join(", ");
+    plBox.textContent = state.playlists.length
+      ? `${state.playlists.length} playlist · ${names}${state.playlists.length > 3 ? "…" : ""}`
+      : "Belum ada playlist";
+  }
   const vid = document.getElementById("profileBannerVideo");
   if (!vid) return;
-  vid.addEventListener("loadeddata", playProfileBanner, { once: true });
-  vid.addEventListener("canplay", playProfileBanner, { once: true });
+  if (!vid.dataset.bound) {
+    vid.dataset.bound = "1";
+    vid.addEventListener("loadeddata", playProfileBanner);
+    vid.addEventListener("canplay", playProfileBanner);
+  }
   // Setelah tab profil terlihat, load + play (mirip xs0ciety yang video-nya di halaman utama)
   requestAnimationFrame(() => {
     try { if (vid.readyState < 2) vid.load(); } catch {}
@@ -2455,7 +2522,7 @@ function renderTrackList(list, containerId) {
       <div class="fadeUp tap rounded-2xl border ${playing ? 'border-white/20 bg-white/[0.06]' : 'border-white/[0.06] bg-white/[0.025] hover:bg-white/[0.045]'} p-[10px] transition ${blocked ? 'opacity-50' : ''} ${inPlaylist ? 'local-playlist-track' : ''}">
         <div class="song-row" onclick="${blocked ? `toast('Lagu ini tidak bisa diputar')` : `playTrackByList(${i},'${containerId}')`}">
           <div class="relative w-[52px] h-[52px] rounded-xl overflow-hidden shrink-0 border border-white/[0.06] bg-white/[0.03]">
-            <img src="${art}" class="w-full h-full object-cover" onerror="this.src='${DEFAULT_ART}'">
+            <img src="${esc(art)}" class="w-full h-full object-cover" onerror="this.onerror=null;this.src=DEFAULT_ART">
             ${playing ? `<div class="absolute inset-0 bg-black/55 flex items-center justify-center"><i data-lucide="pause" class="w-[20px] h-[20px] text-white fill-current"></i></div>` : ''}
           </div>
           <div class="min-w-0">
@@ -2589,7 +2656,7 @@ async function loadTopArtists() {
       return `
         <button onclick="openArtist('${esc(a.username).replace(/'/g, "\\'")}')" class="fadeUp tap shrink-0 w-[104px] text-center">
           <div class="relative w-[104px] h-[104px] rounded-full overflow-hidden border border-white/[0.07]" style="${art ? '' : `background:linear-gradient(135deg,hsl(${hue1},70%,45%) 0%,hsl(${hue2},60%,25%) 100%)`}">
-            ${art ? `<img src="${art}" class="absolute inset-0 w-full h-full object-cover" onerror="this.style.display='none'">` : ''}
+            ${art ? `<img src="${esc(art)}" class="absolute inset-0 w-full h-full object-cover" onerror="this.style.display='none'">` : ''}
           </div>
           <h4 class="text-[12px] font-semibold mt-[8px] truncate">${esc(a.username)}</h4>
           <p class="text-[9.5px] text-white/35 uppercase tracking-[0.1em] mt-[2px] truncate">${a.followers_count ? fmtCount(a.followers_count) + ' flw' : 'Artist'}</p>
@@ -2639,7 +2706,7 @@ function renderRecent() {
   const playing = state.currentTrack && state.currentTrack.id === t.id;
   c.innerHTML = `
     <div onclick="playRecent()" class="tap cursor-pointer rounded-2xl border border-white/[0.07] bg-white/[0.025] hover:bg-white/[0.045] transition p-[12px] flex items-center gap-[12px]">
-      <img src="${art}" class="w-[52px] h-[52px] rounded-xl object-cover border border-white/[0.06] shrink-0" onerror="this.src='${DEFAULT_ART}'">
+      <img src="${esc(art)}" class="w-[52px] h-[52px] rounded-xl object-cover border border-white/[0.06] shrink-0" onerror="this.onerror=null;this.src=DEFAULT_ART">
       <div class="flex-1 min-w-0">
         <h4 class="text-[13.5px] font-semibold truncate">${esc(t.title)}</h4>
         <p class="text-[11px] text-white/45 truncate mt-[3px]">${esc((t.user && t.user.username) || "Unknown")}</p>
@@ -2896,6 +2963,163 @@ function switchPlayerTab(tab) {
 
 let lyricReq = 0;
 
+/* ============================================================
+   TERJEMAHAN LIRIK + MENU NOW PLAYING (⋯)
+============================================================ */
+const TR_LANGS = [["id","Indonesia"],["en","English"],["ms","Melayu"],["ja","日本語"],["ko","한국어"],["zh-CN","中文"],["es","Español"],["ar","العربية"]];
+let trReq = 0;
+
+function trCacheKey(id, lang) { return "sp_tr_" + id + "_" + lang; }
+function loadTrCache(id, lang) {
+  try { const a = JSON.parse(localStorage.getItem(trCacheKey(id, lang)) || "null"); return Array.isArray(a) ? a : null; }
+  catch { return null; }
+}
+function saveTrCache(id, lang, arr) {
+  try { localStorage.setItem(trCacheKey(id, lang), JSON.stringify(arr.map(s => String(s || "").slice(0, 300)))); } catch {}
+}
+
+// Hanya baris yang dinyanyikan yang diterjemahkan (penanda jeda dilewati)
+function trSourceLines() {
+  const idx = [], texts = [];
+  state.lyricLines.forEach((line, i) => {
+    if (!(state.lyricGap && state.lyricGap[i])) { idx.push(i); texts.push(line); }
+  });
+  return { idx, texts };
+}
+
+function applyTranslation(translated) {
+  const { idx } = trSourceLines();
+  const tr = new Array(state.lyricLines.length).fill("");
+  idx.forEach((lineIdx, k) => { tr[lineIdx] = translated[k] || ""; });
+  state.lyricTr = tr;
+  renderLyricLines();
+  renderFullLyrics();
+}
+
+async function ensureTranslation() {
+  const t = state.currentTrack;
+  if (!t || !state.lyricTrOn || !state.lyricLines.length) return;
+  const lang = state.lyricTrLang;
+  const { texts } = trSourceLines();
+  if (!texts.length) return;
+
+  const cached = loadTrCache(t.id, lang);
+  if (cached && cached.length === texts.length) { applyTranslation(cached); return; }
+
+  const myTr = ++trReq;
+  state.lyricTrLoading = true;
+  renderLyricLines();
+  try {
+    const r = await fetch("/api/translate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ lines: texts, to: lang }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (myTr !== trReq || !state.currentTrack || state.currentTrack.id !== t.id) return;
+    if (!r.ok || !d.success || !Array.isArray(d.lines) || d.lines.length !== texts.length) {
+      throw new Error(d.error || "gagal menerjemahkan");
+    }
+    state.lyricTrLoading = false;
+    saveTrCache(t.id, lang, d.lines);
+    applyTranslation(d.lines);
+  } catch (e) {
+    if (myTr !== trReq) return;
+    toast("Terjemahan gagal: " + e.message);
+  } finally {
+    if (myTr === trReq) { state.lyricTrLoading = false; renderLyricLines(); }
+  }
+}
+
+function renderFullLyrics() {
+  const fc = document.getElementById("fullLyricContent");
+  if (!fc || !state.lyricLines.length) return;
+  const showTr = state.lyricTrOn && Array.isArray(state.lyricTr);
+  fc.innerHTML = state.lyricLines.map((line, i) => {
+    if (state.lyricGap && state.lyricGap[i]) return `<div class="fl-gap">● ● ●</div>`;
+    const tr = showTr && state.lyricTr[i] ? `<div class="fl-tr">${esc(state.lyricTr[i])}</div>` : "";
+    return `<div class="fl-line">${esc(line)}</div>${tr}`;
+  }).join("");
+}
+
+function setTrOn(on) {
+  if (on && !state.currentTrack) return toast("Belum ada lagu diputar");
+  state.lyricTrOn = !!on;
+  try { localStorage.setItem("sp_tr_on", on ? "1" : "0"); } catch {}
+  if (!on) {
+    state.lyricTr = null;
+    state.lyricTrLoading = false;
+    trReq++;
+    renderLyricLines();
+    renderFullLyrics();
+  } else if (!state.lyricLines.length) {
+    toast("Terjemahan aktif, menunggu lirik lagu ini");
+  } else {
+    switchPlayerTab("lyrics");
+    ensureTranslation();
+  }
+  renderNpMenu();
+}
+
+function setTrLang(lang) {
+  state.lyricTrLang = lang;
+  try { localStorage.setItem("sp_tr_lang", lang); } catch {}
+  state.lyricTr = null;
+  renderLyricLines();
+  renderFullLyrics();
+  if (state.lyricTrOn) ensureTranslation();
+  renderNpMenu();
+}
+
+function renderNpMenu() {
+  const t = state.currentTrack;
+  if (!t) return;
+  const art = t.artwork_url || (t.user && t.user.avatar_url) || DEFAULT_ART;
+  document.getElementById("npMenuArt").src = art;
+  document.getElementById("npMenuTitle").textContent = t.title || "Unknown";
+  document.getElementById("npMenuArtist").textContent = (t.user && t.user.username) || "Unknown";
+  document.getElementById("npTrSwitch").setAttribute("aria-checked", state.lyricTrOn ? "true" : "false");
+  const langLabel = (TR_LANGS.find(l => l[0] === state.lyricTrLang) || [])[1] || state.lyricTrLang;
+  document.getElementById("npTrState").textContent = state.lyricTrOn
+    ? "Aktif · " + langLabel
+    : "Tampilkan terjemahan di bawah tiap baris";
+  document.getElementById("npTrLangs").innerHTML = TR_LANGS.map(([code, label]) =>
+    `<button class="np-lang tap ${code === state.lyricTrLang ? "on" : ""}" onclick="setTrLang('${code}')">${esc(label)}</button>`).join("");
+  document.getElementById("npOpenSource").href = t.permalink_url || "https://soundcloud.com";
+  if (window.lucide) try { lucide.createIcons(); } catch {}
+}
+
+function openNpMenu() {
+  if (!state.currentTrack) return toast("Belum ada lagu diputar");
+  renderNpMenu();
+  document.getElementById("npMenu").classList.remove("hidden");
+}
+function closeNpMenu() { document.getElementById("npMenu").classList.add("hidden"); }
+function npAddToPlaylist() { const t = state.currentTrack; closeNpMenu(); if (t) openAddTrackModalFor(t); }
+function npDownload() { closeNpMenu(); downloadCurrent(); }
+function npCopyLink() {
+  const t = state.currentTrack;
+  closeNpMenu();
+  if (!t) return;
+  const url = t.permalink_url || "https://soundcloud.com";
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(url).then(() => toast("Tautan lagu disalin"), () => toast("Gagal menyalin tautan"));
+  } else {
+    toast("Browser ini tidak mendukung salin");
+  }
+}
+
+// Dipanggil dari offline-fix.js setelah lagu tersimpan, supaya lirik ikut tersimpan
+function fetchLyricsForOffline(t) {
+  if (!t || !navigator.onLine || loadLyricCache(t.id)) return;
+  const dur = Math.round((t.duration || 0) / 1000);
+  const qs = new URLSearchParams({ title: t.title || "", artist: (t.user && t.user.username) || "", duration: String(dur || 0) });
+  fetch("/api/lyrics?" + qs.toString(), { cache: "no-store" })
+    .then(r => r.json())
+    .then(d => { if (d && d.success && Array.isArray(d.lines) && d.lines.length) saveLyricCache(t.id, d); })
+    .catch(() => {});
+}
+
 /* ---- Lyrics cache (localStorage) supaya offline & replay konsisten ---- */
 function lyricCacheKey(id) { return "sp_lyr_" + String(id); }
 function loadLyricCache(id) {
@@ -2924,6 +3148,7 @@ function saveLyricCache(id, payload) {
   } catch {}
 }
 function applyLyricPayload(d, t) {
+  state.lyricTr = null;
   const plain = d.lines.map(l => (typeof l === "string" ? l : (l.text || "")));
   if (d.synced) {
     const built = buildSyncedLyrics(d.lines.map(l => typeof l === "string" ? { text: l, t: 0 } : l));
@@ -2945,14 +3170,17 @@ function applyLyricPayload(d, t) {
   }
   state.lyricTotalW = acc;
   try { state.lyricOffset = Number(localStorage.getItem("sp_lofs_" + (t && t.id)) ) || 0; } catch { state.lyricOffset = 0; }
-  const fc = document.getElementById("fullLyricContent");
-  if (fc) fc.textContent = plain.join("\n");
+  renderFullLyrics();
   renderLyricLines();
   startLyricLoop();
+  if (state.lyricTrOn) ensureTranslation();
 }
 
 function resetLyrics() {
   lyricReq++;
+  trReq++;
+  state.lyricTr = null;
+  state.lyricTrLoading = false;
   if (lyricRaf) { cancelAnimationFrame(lyricRaf); lyricRaf = 0; }
   if (lyricScrollAnim) { cancelAnimationFrame(lyricScrollAnim); lyricScrollAnim = 0; }
   state.lyricLines = [];
@@ -3110,10 +3338,16 @@ function renderLyricLines() {
   const c = document.getElementById("lyricContent");
   if (!state.lyricLines.length) return;
   const note = state.lyricSynced ? "" : `<div class="text-[10.5px] text-white/35 pb-2">Lirik tanpa sinkron waktu (perkiraan)</div>`;
-  c.innerHTML = note + state.lyricLines.map((line, i) =>
-    `<div class="lyric-line${state.lyricGap && state.lyricGap[i] ? " lyric-gap" : ""}" data-line="${i}">${esc(line)}</div>`
-  ).join("");
+  const showTr = state.lyricTrOn && Array.isArray(state.lyricTr);
+  const status = state.lyricTrOn && state.lyricTrLoading ? `<div class="lyric-tr-status">Menerjemahkan…</div>` : "";
+  c.innerHTML = note + status + state.lyricLines.map((line, i) => {
+    const gap = !!(state.lyricGap && state.lyricGap[i]);
+    const tr = showTr && !gap && state.lyricTr[i] ? `<span class="lyric-tr">${esc(state.lyricTr[i])}</span>` : "";
+    return `<div class="lyric-line${gap ? " lyric-gap" : ""}" data-line="${i}">${esc(line)}${tr}</div>`;
+  }).join("");
   state._lyricEls = [...c.querySelectorAll(".lyric-line")];
+  state.currentLyricLine = -1;
+  updateLyricHighlight();
 }
 
 // Ketuk baris lirik tersinkron -> lompat ke bagian itu
@@ -3361,7 +3595,7 @@ audio.addEventListener("timeupdate", () => {
 });
 
 audio.addEventListener("ended", () => {
-  if (state.repeat === "one") { audio.currentTime = 0; audio.play(); return; }
+  if (state.repeat === "one") { audio.currentTime = 0; audio.play().catch(() => {}); return; }
   playNext();
 });
 
@@ -3582,7 +3816,7 @@ function searchPlaylistCard(p, idx, inGrid = false) {
       onclick="openPlaylist(this.dataset.playlistId,this.dataset.playlistTitle)"
       class="search-playlist-card playlist-row tap ${inGrid ? 'w-full' : 'shrink-0 w-[138px]'} p-[9px] text-left">
       <div class="relative w-full aspect-square rounded-xl overflow-hidden bg-white/[0.05]">
-        <img src="${esc(art)}" class="absolute inset-0 w-full h-full object-cover" onerror="this.src='${DEFAULT_ART}'">
+        <img src="${esc(art)}" class="absolute inset-0 w-full h-full object-cover" onerror="this.onerror=null;this.src=DEFAULT_ART">
         <span class="absolute bottom-2 left-2 text-[9px] font-bold text-white bg-black/65 px-2 py-1 rounded-full">${Number(p.track_count) || 0} lagu</span>
       </div>
       <p class="text-[12px] font-semibold mt-2 truncate">${esc(p.title)}</p>
@@ -3661,7 +3895,7 @@ async function doSearch(q) {
         el.innerHTML = items.map(a => `
           <button data-artist="${esc(a.username)}" onclick="openArtist(this.dataset.artist)"
             class="tap w-full text-left rounded-2xl border border-white/[0.06] bg-white/[0.025] hover:bg-white/[0.045] p-[10px] flex items-center gap-[12px]">
-            <img src="${esc(a.avatar_url || DEFAULT_ART)}" class="w-[52px] h-[52px] rounded-full object-cover" onerror="this.src='${DEFAULT_ART}'">
+            <img src="${esc(a.avatar_url || DEFAULT_ART)}" class="w-[52px] h-[52px] rounded-full object-cover" onerror="this.onerror=null;this.src=DEFAULT_ART">
             <span class="flex-1 min-w-0">
               <span class="block text-[13px] font-semibold truncate">${esc(a.username || "Artis")}</span>
               <span class="block text-[11px] text-white/45 truncate mt-[2px]">${a.followers_count ? fmtCount(a.followers_count) + " followers" : "Artis"}</span>
@@ -3699,6 +3933,20 @@ function renderSearch() {
    LIBRARY
 ============================================================ */
 let libTab = "playlists";
+
+function updateLibCounts() {
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  set("libLikedCount", state.likes.length + " lagu");
+  set("libOfflineCount", state.downloaded.length + " lagu");
+  const artists = new Set(state.likes.map(t => t.user && t.user.username).filter(Boolean));
+  set("libArtistCount", artists.size + " artis");
+  set("libRecentCount", state.recent && state.recent.title ? state.recent.title : "Belum ada");
+}
+
+function openLibraryArtists() {
+  switchView("library");
+  switchLibTab("artists", document.querySelector('.lib-tab[onclick*="artists"]'));
+}
 function switchLibTab(tab, btn) {
   libTab = tab;
   activePlaylistId = null;
@@ -3710,6 +3958,7 @@ function switchLibTab(tab, btn) {
 }
 
 function renderLibrary() {
+  updateLibCounts();
   const el = document.getElementById("libraryContent");
   if (libTab === "playlists") {
     if (activePlaylistId) {
@@ -3782,7 +4031,7 @@ function renderLibrary() {
     }
     el.innerHTML = artists.map(a => `
       <div onclick="openArtist('${esc(a.username).replace(/'/g,"\\'")}')" class="tap cursor-pointer rounded-2xl border border-white/[0.06] bg-white/[0.025] p-[10px] flex items-center gap-[12px] mb-2">
-        <img src="${a.avatar_url || DEFAULT_ART}" class="w-[52px] h-[52px] rounded-full object-cover" onerror="this.src='${DEFAULT_ART}'">
+        <img src="${esc(a.avatar_url || DEFAULT_ART)}" class="w-[52px] h-[52px] rounded-full object-cover" onerror="this.onerror=null;this.src=DEFAULT_ART">
         <div class="flex-1 min-w-0">
           <h4 class="text-[13px] font-semibold truncate">${esc(a.username)}</h4>
         </div>
@@ -3807,6 +4056,10 @@ function createPlaylist() {
 function openAddTrackModal(trackIndex) {
   const track = state.tracks[trackIndex];
   if (!track) return toast("Lagu tidak ditemukan");
+  openAddTrackModalFor(track);
+}
+
+function openAddTrackModalFor(track) {
   pendingPlaylistTrack = track;
   document.getElementById("playlistModalTitle").textContent = "Tambahkan ke playlist";
   document.getElementById("playlistModalSubtitle").textContent = state.playlists.length ? "Pilih playlist atau buat yang baru." : "Buat playlist pertamamu untuk menyimpan lagu ini.";
@@ -3978,7 +4231,7 @@ async function installPWA() {
 }
 
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/sw.js?v=25', { updateViaCache: 'none' }).then(async (reg) => {
+  navigator.serviceWorker.register('/sw.js?v=26', { updateViaCache: 'none' }).then(async (reg) => {
     const sw = document.getElementById("swStatus");
     if (sw) sw.textContent = "Terdaftar";
     reg.update().catch(() => {});
