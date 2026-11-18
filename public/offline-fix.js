@@ -189,6 +189,7 @@
         if (!(await dbGet(t.id))) throw new Error("Penyimpanan perangkat menolak file");
         if (!state.downloaded.some(d => d.id === t.id)) state.downloaded.push(t);
         toast('"' + t.title + '" tersimpan offline');
+        if (typeof fetchLyricsForOffline === "function") fetchLyricsForOffline(t);
         try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (_) {}
       } catch (e) {
         try { await dbDel(t.id); } catch (_) {}
