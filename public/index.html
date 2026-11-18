@@ -36,8 +36,7 @@
 <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
 <link rel="manifest" href="/manifest.json">
 <script src="https://cdn.tailwindcss.com"></script>
-<script src="https://unpkg.com/lucide@0.383.0"></script>
-<script>window.lucide = window.lucide || { createIcons: function(){} };</script>
+<script src="/icons.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1"></script>
 <script src="/soundxs-api-client.js"></script>
 <style>
@@ -866,6 +865,20 @@
   .np-lang.on { background:var(--a1); color:#071109; border-color:transparent; }
   /* Fallback kalau CDN Tailwind gagal dimuat: class dasar tetap bekerja */
   .hidden { display:none !important; }
+  /* Nav & overlay: permukaan solid, tanpa blur (lebih ringan, tidak ada lens gradient) */
+  .lg-pill, #miniPlayer, .modal-overlay, #fullPlayer {
+    -webkit-backdrop-filter: none !important; backdrop-filter: none !important;
+  }
+  .lg-pill {
+    background: #16171b !important; border: 1px solid rgba(255,255,255,.08) !important;
+    box-shadow: 0 10px 24px -12px rgba(0,0,0,.6) !important;
+  }
+  #bottomNav.minimized .lg-pill { background:#1c1d22 !important; border:1px solid rgba(255,255,255,.1) !important; }
+  .lg-lens { display: none !important; }
+  .lg-tab { color: rgba(255,255,255,.5) !important; transition: color .2s ease, background-color .2s ease !important; }
+  .lg-tab.active { color: #fff !important; background: rgba(255,255,255,.08); border-radius: 999px; }
+  .lg-tab svg.ic { width: 22px; height: 22px; stroke-width: 2; }
+  svg.ic { flex-shrink: 0; display: inline-block; vertical-align: middle; }
   /* Fokus keyboard */
   :focus-visible { outline:2px solid var(--a2); outline-offset:2px; }
 </style>
@@ -1124,146 +1137,6 @@ window.addEventListener("load", async () => {
     refreshOfflineCount();
   } catch {}
 });
-</script>
-<style id="preloader-css">
-  #preloader{position:fixed;top:0;right:0;bottom:0;left:0;z-index:2147483647;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#050a18;isolation:isolate}
-  #preloader.pl-hide{pointer-events:none}
-  .pl-skip #preloader{display:none!important}
-  .pl-sky{position:absolute;top:0;right:0;bottom:0;left:0;background:radial-gradient(120% 90% at 50% 105%,#1b3263 0%,#0d1836 48%,#050a18 100%)}
-  .pl-sunset{position:absolute;top:0;right:0;bottom:0;left:0;background:radial-gradient(130% 80% at 50% 78%,rgba(255,140,60,.55) 0%,rgba(226,76,110,.38) 32%,rgba(96,52,140,.30) 58%,rgba(5,10,24,0) 82%)}
-  .pl-blob{position:absolute;border-radius:50%;opacity:0}
-  .pl-blob.a{width:60vmax;height:60vmax;left:-24vmax;top:0;background:radial-gradient(circle,#ff8a3d 0%,rgba(255,138,61,0) 66%)}
-  .pl-blob.b{width:54vmax;height:54vmax;right:-20vmax;bottom:0;background:radial-gradient(circle,#8a4fd8 0%,rgba(138,79,216,0) 66%)}
-  .pl-blob.c{width:44vmax;height:44vmax;left:20%;top:-18vmax;background:radial-gradient(circle,#2f6bd8 0%,rgba(47,107,216,0) 66%)}
-  .pl-glass{position:relative;width:min(84vw,360px);padding:34px 22px 30px;border-radius:38px;text-align:center;overflow:hidden;
-    background:linear-gradient(145deg,rgba(255,255,255,.20),rgba(255,255,255,.05) 55%,rgba(255,255,255,.10));
-    -webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);
-    border:1px solid rgba(255,255,255,.28);
-    box-shadow:inset 0 1.5px 1px rgba(255,255,255,.55),inset 0 -1.5px 1px rgba(255,255,255,.12),inset 0 0 40px rgba(255,255,255,.06),0 20px 40px rgba(0,0,0,.4)}
-  .pl-glass .pl-hl{position:absolute;left:4%;top:0;width:92%;height:22%;border-radius:0 0 60% 60%/0 0 100% 100%;background:linear-gradient(180deg,rgba(255,255,255,.16),rgba(255,255,255,0));pointer-events:none}
-  .pl-glass .pl-sheen{position:absolute;top:-20%;left:-60%;width:40%;height:140%;-webkit-transform:rotate(18deg);transform:rotate(18deg);background:linear-gradient(90deg,rgba(255,255,255,0),rgba(255,255,255,.22),rgba(255,255,255,0));pointer-events:none}
-  .pl-glass svg{width:100%;height:auto;display:block;overflow:visible;position:relative}
-  .pl-brand{position:relative;margin-top:14px;font:300 25px/1 "Inter",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;letter-spacing:.5em;padding-left:.5em;color:#fff1d6;text-shadow:0 0 18px rgba(255,170,80,.55)}
-  .pl-brand b{font-weight:600;color:#ffc46a}
-</style>
-</head>
-<body class="grad-bg min-h-screen">
-<div id="preloader" role="status" aria-label="Memuat SoundXs">
-  <div class="pl-sky"></div><div class="pl-sunset" id="plSunset"></div>
-  <div class="pl-blob a"></div><div class="pl-blob b"></div><div class="pl-blob c"></div>
-  <div class="pl-glass" id="plGlass"><div class="pl-hl"></div><div class="pl-sheen" id="plSheen"></div>
-  <svg viewBox="0 0 240 168" aria-hidden="true">
-    <defs>
-      <radialGradient id="plSun" cx="50%" cy="35%" r="70%"><stop offset="0" stop-color="#ffe9a0"/><stop offset=".55" stop-color="#ff9a3c"/><stop offset="1" stop-color="#e8483f"/></radialGradient>
-      <radialGradient id="plGlow"><stop offset="0" stop-color="#ffb347" stop-opacity=".7"/><stop offset=".55" stop-color="#ff7a4c" stop-opacity=".22"/><stop offset="1" stop-color="#ff7a4c" stop-opacity="0"/></radialGradient>
-      <linearGradient id="plBar" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffd98a"/><stop offset="1" stop-color="#ffd98a" stop-opacity="0"/></linearGradient>
-      <linearGradient id="plLine" x1="0" x2="1"><stop offset="0" stop-color="#ffd98a" stop-opacity="0"/><stop offset=".5" stop-color="#ffd98a"/><stop offset="1" stop-color="#ffd98a" stop-opacity="0"/></linearGradient>
-      <clipPath id="plSkyC"><rect x="-40" y="-60" width="320" height="178"/></clipPath>
-      <clipPath id="plSea"><rect x="0" y="119" width="240" height="49"/></clipPath>
-    </defs>
-    <g clip-path="url(#plSkyC)">
-      <circle id="plGlowC" cx="120" cy="118" r="100" fill="url(#plGlow)"/>
-      <circle id="plSunC" cx="120" cy="118" r="42" fill="url(#plSun)"/>
-    </g>
-    <rect id="plHor" x="14" y="117.5" width="212" height="1" fill="url(#plLine)" opacity=".95"/>
-    <g fill="#04081a">
-      <path id="plTrunk" d="M137 118C135 100 130 78 126 54" fill="none" stroke="#04081a" stroke-width="5.5" stroke-linecap="round" pathLength="1" stroke-dasharray="1" stroke-dashoffset="0"/>
-      <g id="plCrown">
-      <g transform="translate(126 54) rotate(-22)"><g class="pl-fr" data-s="2.5" data-t="5" data-p="0"><path d="M0 0C12 -13 36 -15 56 5C37 -3 17 -4 0 0Z"/></g></g>
-      <g transform="translate(126 54) rotate(22)"><g class="pl-fr" data-s="2" data-t="5.4" data-p="1"><path d="M0 0C12 -13 36 -15 56 5C37 -3 17 -4 0 0Z"/></g></g>
-      <g transform="translate(126 54) rotate(60)"><g class="pl-fr" data-s="3" data-t="5.7" data-p="2"><path d="M0 0C12 -13 36 -15 56 5C37 -3 17 -4 0 0Z"/></g></g>
-      <g transform="translate(126 54) scale(-1 1) rotate(-22)"><g class="pl-fr" data-s="2.5" data-t="5.3" data-p="0.5"><path d="M0 0C12 -13 36 -15 56 5C37 -3 17 -4 0 0Z"/></g></g>
-      <g transform="translate(126 54) scale(-1 1) rotate(22)"><g class="pl-fr" data-s="2" data-t="5.6" data-p="1.5"><path d="M0 0C12 -13 36 -15 56 5C37 -3 17 -4 0 0Z"/></g></g>
-      <g transform="translate(126 54) scale(-1 1) rotate(60)"><g class="pl-fr" data-s="3" data-t="5.1" data-p="2.5"><path d="M0 0C12 -13 36 -15 56 5C37 -3 17 -4 0 0Z"/></g></g>
-      <g transform="translate(126 54) rotate(-80) scale(.7)"><g class="pl-fr" data-s="2" data-t="5.8" data-p="3"><path d="M0 0C12 -13 36 -15 56 5C37 -3 17 -4 0 0Z"/></g></g>
-      <circle cx="126" cy="55" r="3.8"/></g>
-    </g>
-    <g clip-path="url(#plSea)">
-      <path class="pl-w" data-d="6" data-s="1" d="M-40 140 q10 -3.5 20 0 t20 0 t20 0 t20 0 t20 0 t20 0 t20 0 t20 0 t20 0 t20 0 t20 0 t20 0" fill="none" stroke="url(#plLine)" stroke-width=".8" opacity="0.55"/>
-      <path class="pl-w" data-d="8" data-s="-1" d="M-40 147 q10 -3.5 20 0 t20 0 t20 0 t20 0 t20 0 t20 0 t20 0 t20 0 t20 0 t20 0 t20 0 t20 0" fill="none" stroke="url(#plLine)" stroke-width=".8" opacity="0.35"/>
-      <rect class="pl-bar" data-h="6.7" data-o="0.4" data-d="2.78" data-b="3.60" data-p="0.00" x="54" y="124" width="2.6" height="6.7" rx="1.3" fill="url(#plBar)" opacity="0.4"/>
-      <rect class="pl-bar" data-h="11.5" data-o="0.47" data-d="2.65" data-b="3.67" data-p="0.90" x="65" y="124" width="2.6" height="11.5" rx="1.3" fill="url(#plBar)" opacity="0.47"/>
-      <rect class="pl-bar" data-h="12.2" data-o="0.53" data-d="2.82" data-b="3.74" data-p="1.80" x="76" y="124" width="2.6" height="12.2" rx="1.3" fill="url(#plBar)" opacity="0.53"/>
-      <rect class="pl-bar" data-h="12.4" data-o="0.6" data-d="2.72" data-b="3.81" data-p="2.70" x="87" y="124" width="2.6" height="12.4" rx="1.3" fill="url(#plBar)" opacity="0.6"/>
-      <rect class="pl-bar" data-h="18.6" data-o="0.67" data-d="3.11" data-b="3.88" data-p="3.60" x="98" y="124" width="2.6" height="18.6" rx="1.3" fill="url(#plBar)" opacity="0.67"/>
-      <rect class="pl-bar" data-h="15.9" data-o="0.73" data-d="2.42" data-b="3.95" data-p="4.50" x="109" y="124" width="2.6" height="15.9" rx="1.3" fill="url(#plBar)" opacity="0.73"/>
-      <rect class="pl-bar" data-h="18.0" data-o="0.8" data-d="3.13" data-b="4.02" data-p="5.40" x="120" y="124" width="2.6" height="18.0" rx="1.3" fill="url(#plBar)" opacity="0.8"/>
-      <rect class="pl-bar" data-h="22.1" data-o="0.73" data-d="2.06" data-b="4.09" data-p="6.30" x="131" y="124" width="2.6" height="22.1" rx="1.3" fill="url(#plBar)" opacity="0.73"/>
-      <rect class="pl-bar" data-h="21.8" data-o="0.67" data-d="3.35" data-b="4.16" data-p="7.20" x="142" y="124" width="2.6" height="21.8" rx="1.3" fill="url(#plBar)" opacity="0.67"/>
-      <rect class="pl-bar" data-h="16.0" data-o="0.6" data-d="2.86" data-b="4.23" data-p="8.10" x="153" y="124" width="2.6" height="16.0" rx="1.3" fill="url(#plBar)" opacity="0.6"/>
-      <rect class="pl-bar" data-h="10.0" data-o="0.53" data-d="2.02" data-b="4.30" data-p="9.00" x="164" y="124" width="2.6" height="10.0" rx="1.3" fill="url(#plBar)" opacity="0.53"/>
-      <rect class="pl-bar" data-h="9.6" data-o="0.47" data-d="2.08" data-b="4.37" data-p="9.90" x="175" y="124" width="2.6" height="9.6" rx="1.3" fill="url(#plBar)" opacity="0.47"/>
-      <rect class="pl-bar" data-h="5.7" data-o="0.4" data-d="2.34" data-b="4.44" data-p="10.80" x="186" y="124" width="2.6" height="5.7" rx="1.3" fill="url(#plBar)" opacity="0.4"/>
-    </g>
-  </svg>
-  <div class="pl-brand" id="plBrand">Sound<b>Xs</b></div>
-  </div>
-</div>
-<script>
-(function () {
-  var el = document.getElementById("preloader");
-  var seen = false;
-  try { seen = sessionStorage.getItem("sx_preloader_seen") === "1"; } catch (e) {}
-  if (seen) { document.documentElement.classList.add("pl-skip"); if (el) el.remove(); return; }
-  try { sessionStorage.setItem("sx_preloader_seen", "1"); } catch (e) {}
-  setTimeout(function () { el.classList.add("pl-hide"); }, 6200);
-  setTimeout(function () { el.remove(); }, 7500);
-
-  /* Animasi digerakkan JS (bukan CSS/SMIL) supaya jalan di semua browser;
-     kalau JS animasi gagal, preloader tetap tampil di kondisi akhir. */
-  var $ = function (id) { return document.getElementById(id); };
-  var q = function (sel) { return Array.prototype.slice.call(el.querySelectorAll(sel)); };
-  var cl = function (x) { return x < 0 ? 0 : x > 1 ? 1 : x; };
-  var seg = function (t, a, b) { return cl((t - a) / (b - a)); };
-  var eo = function (x) { return 1 - Math.pow(1 - x, 3); };
-  var glass = $("plGlass"), sheen = $("plSheen"), sunset = $("plSunset"), brand = $("plBrand"), crown = $("plCrown");
-  var sunC = $("plSunC"), glowC = $("plGlowC"), hor = $("plHor"), trunk = $("plTrunk");
-  var blobs = q(".pl-blob"), fr = q(".pl-fr"), bars = q(".pl-bar"), ws = q(".pl-w");
-  var T2 = Math.PI * 2, t0 = null, last = 0;
-  function frame(now) {
-    if (!el.parentNode) return;
-    if (t0 === null) t0 = now;
-    if (now - last < 30 && now !== t0) { requestAnimationFrame(frame); return; }
-    last = now;
-    var t = (now - t0) / 1000;
-    el.style.opacity = String(1 - seg(t, 6.2, 7.4));
-    sunset.style.opacity = String(seg(t, .8, 5.8));
-    for (var i = 0; i < blobs.length; i++) {
-      blobs[i].style.opacity = String(.55 * seg(t, 1 + i * .4, 4 + i * .4));
-    }
-    var g = eo(seg(t, .2, 2)), fl = -3.5 * (1 - Math.cos(Math.max(0, t - 2) * .9));
-    glass.style.opacity = String(g);
-    glass.style.transform = "translateY(" + ((1 - g) * 18 + fl) + "px) scale(" + (.94 + .06 * g) + ")";
-    sheen.style.left = (-60 + 220 * cl((((t - 2.6) % 4.2 + 4.2) % 4.2) / 2.3)) + "%";
-    var rise = eo(seg(t, 1, 4.4)), cy = 190 - 72 * rise;
-    sunC.setAttribute("cy", cy);
-    glowC.setAttribute("cy", cy);
-    glowC.setAttribute("r", 92 + 9 * Math.sin(Math.max(0, t - 3) * 1.4));
-    hor.setAttribute("opacity", .95 * seg(t, .6, 2.2));
-    trunk.setAttribute("stroke-dashoffset", 1 - eo(seg(t, 2.8, 4.6)));
-    crown.setAttribute("opacity", seg(t, 4.2, 5.4));
-    var bt = eo(seg(t, 4.1, 5.9));
-    brand.style.opacity = String(bt);
-    brand.style.transform = "translateY(" + ((1 - bt) * 10) + "px)";
-    var amp = seg(t, 4.4, 6);
-    for (i = 0; i < fr.length; i++) {
-      var d = fr[i].dataset;
-      fr[i].setAttribute("transform", "rotate(" + (d.s * amp * Math.sin(t * T2 / d.t + +d.p)) + ")");
-    }
-    for (i = 0; i < ws.length; i++) {
-      var w = ws[i].dataset;
-      ws[i].setAttribute("transform", "translate(" + (w.s * 40 * ((t / w.d) % 1)) + " 0)");
-      ws[i].style.opacity = String(seg(t, 3.2, 4.6));
-    }
-    for (i = 0; i < bars.length; i++) {
-      var b = bars[i].dataset, a = seg(t, +b.b, +b.b + 1);
-      bars[i].setAttribute("height", 2 + b.h * a * (.5 + .5 * Math.sin(t * T2 / b.d + +b.p)));
-      bars[i].setAttribute("opacity", b.o * a);
-    }
-    if (t < 7.5) requestAnimationFrame(frame);
-  }
-  try { frame(performance.now()); requestAnimationFrame(frame); } catch (e) {}
-})();
 </script>
 
 <div id="app">
@@ -4231,7 +4104,7 @@ async function installPWA() {
 }
 
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/sw.js?v=26', { updateViaCache: 'none' }).then(async (reg) => {
+  navigator.serviceWorker.register('/sw.js?v=27', { updateViaCache: 'none' }).then(async (reg) => {
     const sw = document.getElementById("swStatus");
     if (sw) sw.textContent = "Terdaftar";
     reg.update().catch(() => {});

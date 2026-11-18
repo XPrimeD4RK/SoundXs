@@ -1,7 +1,7 @@
 // SoundXs Service Worker — App-grade PWA
 // v26: lirik ikut tersimpan offline, perbaikan audio recovery
 // v25: push notification, background sync, shortcut handler, offline full
-const CACHE     = "soundxs-v26";
+const CACHE     = "soundxs-v27";
 const AUDIO_CACHE = "soundxs-audio-v1";
 const LOCAL     = ["/", "/index.html", "/soundxs-api-client.js", "/audio.js",
                    "/manifest.json", "/favicon.ico", "/favicon-32x32.png",
