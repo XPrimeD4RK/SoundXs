@@ -6,7 +6,6 @@ export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "https://soundxs.web.id");
   res.setHeader("Vary", "Origin");
   res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
-  res.setHeader("Cache-Control", "public, max-age=1800");
   if (await rateLimit(req, res, { name: "search", max: 120 })) return;
 
   if (!client_id) {
@@ -48,6 +47,7 @@ export default async function handler(req, res) {
 
       data.tracks = data.tracks.filter(Boolean).map(enhanceTrack);
 
+      res.setHeader("Cache-Control", "public, max-age=1800");
       return res.status(200).json({
         success: true,
         playlist: {
@@ -89,7 +89,7 @@ export default async function handler(req, res) {
   const safeType = allowedTypes.includes(type) ? type : "tracks";
 
   try {
-    const searchUrl = `https://api-v2.soundcloud.com/search/${safeType}?q=${encodeURIComponent(q)}&client_id=${client_id}&limit=20`;
+    const searchUrl = `https://api-v2.soundcloud.com/search/${safeType}?q=${encodeURIComponent(q)}&client_id=${encodeURIComponent(client_id)}&limit=20`;
     console.log(`[search] type=${safeType} q="${q}"`);
 
     const controller = new AbortController();
@@ -164,6 +164,7 @@ export default async function handler(req, res) {
       }));
     }
 
+    res.setHeader("Cache-Control", "public, max-age=1800");
     return res.status(200).json({
       success: true,
       type: safeType,
