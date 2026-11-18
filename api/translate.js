@@ -3,41 +3,72 @@ import { rateLimit } from "../lib/ratelimit.js";
 //   POST /api/translate   body: { "lines": ["...", ...], "to": "id" }
 //   -> { success: true, lines: ["...", ...] }   (urutan & jumlah sama dengan input)
 //
-// Sumber: endpoint terjemahan publik (tanpa API key), bahasa asal dideteksi otomatis.
-// Baris dikirim sebagai satu blok dipisah \n supaya banyak baris cukup satu request.
-// Kalau jumlah baris hasil tidak cocok (sumber kadang menggabung/memecah baris),
-// baris itu diterjemahkan satu-satu. Ada batas waktu total supaya tidak kena timeout.
+// Rantai sumber: Google gtx (batch) -> MyMemory (per baris, fallback).
+// Status upstream dicatat ke log supaya kelihatan kenapa gagal.
 
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0 Safari/537.36";
 const LANGS = new Set(["id", "en", "ms", "ja", "ko", "zh-CN", "es", "ar"]);
 const MAX_LINES = 400;
 const MAX_LINE_CHARS = 300;
 const CHUNK_CHARS = 1200;
-const FALLBACK_LIMIT = 40;
-const REQ_TIMEOUT = 8000;
+const REQ_TIMEOUT = 6000;
 const BUDGET_MS = 9000;
+const MM_CONCURRENCY = 5;
 
-async function gtx(text, to) {
+async function timedFetch(url, opts = {}) {
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), REQ_TIMEOUT);
   try {
-    const qs = new URLSearchParams({ client: "gtx", sl: "auto", tl: to, dt: "t", q: text });
-    const r = await fetch(`https://translate.googleapis.com/translate_a/single?${qs}`, {
-      signal: ctl.signal,
-      headers: { "User-Agent": UA, Accept: "application/json" },
-    });
-    if (!r.ok) return null;
-    const data = await r.json();
-    if (!Array.isArray(data) || !Array.isArray(data[0])) return null;
-    return data[0].map(seg => (Array.isArray(seg) && typeof seg[0] === "string" ? seg[0] : "")).join("");
-  } catch {
-    return null;
+    return await fetch(url, { ...opts, signal: ctl.signal });
   } finally {
     clearTimeout(timer);
   }
 }
 
-// Kelompokkan baris jadi potongan yang muat dalam satu request
+async function gtx(text, to) {
+  try {
+    const qs = new URLSearchParams({ client: "gtx", sl: "auto", tl: to, dt: "t", q: text });
+    const r = await timedFetch(`https://translate.googleapis.com/translate_a/single?${qs}`, {
+      headers: { "User-Agent": UA, Accept: "application/json" },
+    });
+    if (!r.ok) {
+      console.error(`[translate] gtx status ${r.status}`);
+      return null;
+    }
+    const data = await r.json();
+    if (!Array.isArray(data) || !Array.isArray(data[0])) {
+      console.error("[translate] gtx unexpected shape");
+      return null;
+    }
+    return data[0].map(seg => (Array.isArray(seg) && typeof seg[0] === "string" ? seg[0] : "")).join("");
+  } catch (err) {
+    console.error("[translate] gtx error", err.name, err.message);
+    return null;
+  }
+}
+
+async function mymemory(text, to) {
+  try {
+    const qs = new URLSearchParams({ q: text, langpair: `Autodetect|${to}` });
+    const r = await timedFetch(`https://api.mymemory.translated.net/get?${qs}`, {
+      headers: { "User-Agent": UA, Accept: "application/json" },
+    });
+    if (!r.ok) {
+      console.error(`[translate] mymemory status ${r.status}`);
+      return null;
+    }
+    const d = await r.json();
+    if (d.responseStatus !== 200 || typeof d.responseData?.translatedText !== "string") {
+      console.error("[translate] mymemory", d.responseStatus, String(d.responseDetails || "").slice(0, 120));
+      return null;
+    }
+    return d.responseData.translatedText.trim();
+  } catch (err) {
+    console.error("[translate] mymemory error", err.name, err.message);
+    return null;
+  }
+}
+
 function chunkLines(items) {
   const chunks = [];
   let cur = [], len = 0;
@@ -54,15 +85,18 @@ async function translateAll(items, to, out, deadline) {
   for (const chunk of chunkLines(items)) {
     if (Date.now() > deadline) break;
     const res = await gtx(chunk.map(c => c.text).join("\n"), to);
-    if (res === null) continue;
-    const parts = res.split("\n").map(s => s.trim());
-    if (parts.length === chunk.length) {
-      chunk.forEach((c, k) => { out[c.i] = parts[k]; });
-      continue;
+    if (res !== null) {
+      const parts = res.split("\n").map(s => s.trim());
+      if (parts.length === chunk.length) {
+        chunk.forEach((c, k) => { out[c.i] = parts[k]; });
+        continue;
+      }
     }
-    for (const c of chunk.slice(0, FALLBACK_LIMIT)) {
-      if (Date.now() > deadline) break;
-      out[c.i] = (await gtx(c.text, to)) || "";
+    // gtx gagal atau baris tidak cocok: fallback per baris ke MyMemory, paralel terbatas
+    for (let k = 0; k < chunk.length && Date.now() < deadline; k += MM_CONCURRENCY) {
+      const slice = chunk.slice(k, k + MM_CONCURRENCY);
+      const results = await Promise.all(slice.map(c => mymemory(c.text, to)));
+      slice.forEach((c, j) => { if (results[j]) out[c.i] = results[j]; });
     }
   }
 }
@@ -96,11 +130,12 @@ export default async function handler(req, res) {
   try {
     await translateAll(items, to, out, Date.now() + BUDGET_MS);
     if (items.length && !out.some(Boolean)) {
+      console.error("[translate] all sources failed", items.length, "lines to", to);
       return res.status(502).json({ success: false, error: "Sumber terjemahan tidak merespons" });
     }
     return res.status(200).json({ success: true, lines: out });
   } catch (err) {
-    console.error("[translate]", err.message);
+    console.error("[translate] unexpected", err.message);
     return res.status(500).json({ success: false, error: "Terjemahan gagal" });
   }
 }
